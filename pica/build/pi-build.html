@@ -1,0 +1,4030 @@
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+/**
+ * g-app is a basic application component that provides some convenient
+ * default styling and behavior for web applications. It can be used on 
+ * its own, but more commonly it's extended to create a custom element 
+ * for a web application. 
+ *
+ * g-app is designed to fit inside it's parent element. If g-app is placed
+ * inside document.body, then it will fill the browser window. g-app lays out
+ * its contents using a flexible box (http://www.w3.org/TR/css3-flexbox/).
+ * To make a child of g-app or its shadowDOM flex sized, the class "flex" can be, 
+ * added.
+ *
+ * Example 1: Making a simple app using g-app directly:
+ *
+ *     <g-app>
+ *       <header>Simple App</header>
+ *       <section class="content flex">Content</section>
+ *       <footer>more...</footer>
+ *     </g-app>
+ *
+ * Example 2: Making an app custom element that extends g-app
+ * 
+ *     <my-app></my-app>
+ *
+ *     <element name="my-app" extends="g-app">
+ *       <template>
+ *         <style>
+ *           header, section, footer {
+ *             padding: 10px;
+ *           }
+ *       
+ *           .selected {
+ *             background: gray;
+ *           }
+ *       
+ *           .content {
+ *             background: tomato;
+ *           }
+ *         </style>
+ *         <header on-click="headerCkick">My App</header>
+ *         <section class="content flex">Content</section>
+ *         <footer>more...</footer>
+ *       </template>
+ *       <script>
+ *         Toolkit.register(this, {
+ *           ready: function() {
+ *             this.super(arguments);
+ *             console.log('app ready!');
+ *           },
+ *           headerCkick: function(inEvent, inDetail, inSender) {
+ *             inSender.classList.toggle('selected');
+ *           }
+ *         });
+ *       < /script >
+ *     </element>
+ *
+ * @class g-app
+ */
+-->
+<element name="g-app">
+  <!-- NOTE: special processing for stylesheet so that extendors get
+  styling without having to include this styling specifically.
+  TODO(sorvell): it's probably better to do this by requiring users to include
+  an external stylesheet explicitly in g-app extendors. We can use < shadow >
+  tag to bring in @host styles, but that will not style shadowDOM elements in 
+  the extendor's shadow.
+  -->
+  <style id="g-app">
+    @host {
+      * {
+        /* fit to container */
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      
+        /* layout content using flexbox */
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-orient: vertical;
+        -webkit-flex-flow: column;
+        flex-direction: column;
+        
+        /* convenient defaults */
+        font-family: 'Helvetica Neue', Helvetica, Arial, 'open sans', sans-serif;
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+      }
+    }
+      
+    /* oobe helper for flex'ing shadow content */
+    .flex {
+      -webkit-box-flex: 1;
+      -webkit-flex: 1;
+      flex: 1;
+    }
+
+    /* oobe helper for flex'ing distributed content */
+    content::-webkit-distributed(.flex) {
+      -webkit-box-flex: 1;
+      -webkit-flex: 1;
+      flex: 1;
+    }
+  </style>
+  <template>
+    <content></content>
+  </template>
+  <script>
+    var style = this.querySelector('#g-app');
+    var ensureHostStyles = function(inNode) {
+      var root = inNode.webkitShadowRoot;
+      if (root) {
+        Toolkit.shimShadowDOMStyling([style], inNode.localName);
+        root.insertBefore(style.cloneNode(true), root.childNodes[0]);
+      }
+    }
+
+    Toolkit.register(this, {
+      ready: function() {
+        ensureHostStyles(this);
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2012 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+-->
+<element name="g-panel-transition">
+  <script>
+    Toolkit.register(this, {
+      transitionClass: 'transition',
+      timeout: 1000,
+      //* indicates only one panel should be displayed at a time.
+      highlander: true,
+      setup: function(inPanels) {
+        this.panels = inPanels;
+        this.panels.getPanels().forEach(function(p, i) {
+          this.setupPanel(p, i);
+        }, this);
+        this.finishListener = this.finish.bind(this);
+      },
+      teardown: function() {
+        this.panels.getPanels().forEach(function(p, i) {
+          this.teardownPanel(p, i);
+        }, this);
+      },
+      setupPanel: function(inPanel, inIndex) {
+        if (this.transitionClass) {
+          inPanel.classList.add(this.transitionClass);
+        }
+      },
+      teardownPanel: function(inPanel, inIndex) {
+        inPanel.classList.remove(this.transitionClass);  
+        inPanel.style.opacity = inPanel.style.webkitTransform = inPanel.style.transform = null;
+        if (this.highlander) {
+          this.panels.enablePanelShowing(inPanel, true);
+        }
+      },
+      canTransition: function() {
+        return true;
+      },
+      go: function(inFrom, inTo, inForward) {
+        this.from = inFrom;
+        this.to = inTo;
+        this.forward = inForward;
+        this._transitioning = true;
+        this.setupTimeout();
+        this.begin(inFrom, inTo, inForward);
+      },
+      finish: function() {
+        if (this._transitioning) {
+          this.complete(); 
+          this.cancel();
+          this.panels.finishTransition(this.from, this.to, this.forward);
+        }
+      },
+      setupTimeout: function() {
+        requestAnimationFrame(function() {
+          this._timeout = this.asyncMethod('finishListener', null,
+            this.timeout);
+        }.bind(this));
+      },
+      cancel: function() {
+        clearTimeout(this._timeout);
+        this._transitioning = this._timeout = false;
+      },
+      stop: function() {
+        this.finish();
+      },
+      // transitions typically override begin/complete
+      begin: function() {
+      },
+      complete: function() {
+      },
+      // refresh the transition state
+      refresh: function() {
+      }
+    });
+  </script>
+</element>
+
+<element name="g-none-panel-transition" extends="g-panel-transition">
+  <script>
+    Toolkit.register(this, {
+      begin: function() {
+        this.finish();
+      }
+    })
+  </script>
+</element>
+<!--
+/*
+ * Copyright 2012 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+-->
+<element name="g-keyframe-panel-transition" extends="g-panel-transition">
+  <script>
+    var END_EVENT = 'animationEnd';
+    var WEBKIT_END_EVENT = 'webkitAnimationEnd';
+    
+    Toolkit.register(this, {
+      transitionClass: 'animate',
+      setup: function(inPanels) {
+        this.super(arguments);
+        this.panels.addEventListener(END_EVENT, this.finishListener);
+        this.panels.addEventListener(WEBKIT_END_EVENT, this.finishListener);
+      },
+      teardown: function() {
+        this.super(arguments);
+        this.panels.removeEventListener(END_EVENT, this.finishListener);
+        this.panels.removeEventListener(WEBKIT_END_EVENT, this.finishListener);
+      },
+      begin: function() {
+        this.from.classList.add(this.forward ? 'panels-ascending-from' :
+            'panels-descending-from');
+        this.to.classList.add(this.forward ? 'panels-ascending-to' :
+            'panels-descending-to');
+      },
+      complete: function() {
+        this.from.classList.remove('panels-ascending-from', 
+            'panels-descending-from');
+        this.to.classList.remove('panels-ascending-to', 
+            'panels-descending-to');
+      }
+    });
+  </script>
+</element>
+
+
+<!--
+/*
+ * Copyright 2012 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+-->
+<element name="g-flow-panel-transition" extends="g-panel-transition">
+  <template>
+    <style scoped id="flowsheet">
+      g-panels[transition='flow'] > .right {
+        left: auto;
+        right: 0;
+      }
+      
+      g-panels[transition='flow'] > .narrow-layout {
+        width: 100%;
+        box-shadow: none;
+      }
+      
+      g-panels[transition='flow'] > .narrow-layout.custom-panel {
+        width: auto;
+      }
+    </style>
+  </template>
+  <script>
+    
+    var isNodeHidden = function(inNode) {
+      return (inNode.offsetWidth) == 0 && (inNode.offsetHeight == 0);
+    }
+    
+    var WEBKIT_END_EVENT = 'webkitTransitionEnd';
+    var END_EVENT = 'transitionEnd';
+    
+    Toolkit.register(this, {
+      highlander: false,
+      narrowMedia: '(max-width: 800px)',
+      setup: function() {
+        this.super(arguments);
+        this.listenForMediaMatch();
+        // TODO(sorvell): redo when reference combinators arrive
+        //this.panels.appendChild(this.$.flowsheet);
+
+        this.boundResizeHandler = this.resizeHandler.bind(this);
+        window.addEventListener('resize', this.boundResizeHandler);
+        this.panels.addEventListener(END_EVENT, this.finishListener);
+        this.panels.addEventListener(WEBKIT_END_EVENT, this.finishListener);
+      },
+      teardown: function() {
+        window.removeEventListener('resize', this.boundResizeHandler);
+        // TODO(sorvell): how do we remove a node from lightDOM?
+        // Need a ref to the node in lightDOM; workaround until fixed.
+        var sheet = this.panels.querySelector(this.$.flowsheet.id);
+        if (sheet) {
+          this.panels.removeChild(sheet);
+        }
+        this.super();
+        this.panels.removeEventListener(END_EVENT, this.finishListener);
+        this.panels.removeEventListener(WEBKIT_END_EVENT, this.finishListener);
+      },
+      listenForMediaMatch: function() {
+        var mq = window.matchMedia(this.narrowMedia);
+        mq.addListener(this.layoutChange.bind(this));
+        this.layoutChange(mq);
+      },
+      layoutChange: function(inQuery) {
+        this.narrowLayout = inQuery.matches;
+        this.panels.getPanels().forEach(function(p) {
+          p.classList.toggle('narrow-layout', this.narrowLayout);
+        }, this);
+        this.refresh();
+      },
+      enableTransitions: function(inEnable) {
+        this.panels.getPanels().forEach(function(p) {
+          p.style.webkitTransition = p.style.transition = inEnable ? null : 'none';
+        });
+      },
+      canTransition: function() {
+        return !isNodeHidden(this.panels);
+      },
+      resizeHandler: function(e) {
+        if (this.narrowLayout && !this.resizing) {
+          this.resizing = this.asyncMethod('resize', null, 50);
+        }
+      },
+      resize: function() {
+        clearTimeout(this.resizing);
+        this.resizing = null;
+        this.refresh();
+      },
+      refresh: function() {
+        this.enableTransitions(false);
+        this.to = this.panels.getSelectedPanel();
+        if (this.canTransition()) {
+          this.begin();
+        }
+        requestAnimationFrame(function() {
+          this.enableTransitions(true);
+        }.bind(this));
+      },
+      begin: function() {
+        var i = this.panels.indexOf(this.to);
+        if (this.panelIsRightAligned(this.to)) {
+          this.applyRightLayout(this.to, i);
+        } else {
+          this.applyLeftLayout(this.to, i);
+        }
+      },
+      // inIndex appears at the left with subsequent nodes
+      // moved out of the way to the right; right aligned nodes are ignored
+      applyLeftLayout: function(inTo, inIndex) {
+        var l, count = this.count;
+        this.panels.getPanels().forEach(function(p, i) {
+          var x = !l ? 0 : l.offsetWidth + 'px';
+          var right = this.panelIsRightAligned(p);
+          p.style.zIndex = right ? -i : null;
+          p.style.webkitTransform = p.style.transform = 'translate3d(' + (right ? 0 : x) + ',0,0)';
+          if (i >= inIndex) {
+            l = p;
+          }
+        }, this);
+      },
+      // inIndex appears at the right with previous nodes
+      // moved out of the way to the left; note z-index used to get proper stacking
+      applyRightLayout: function(inTo, inIndex) {
+        var p$ = this.panels.getPanels(), right=true, l;
+        for (var i=p$.length-1, p; p=p$[i]; i--) {
+          var x = l ? -l.offsetWidth : 0;
+          p.style.zIndex = right ? p$.length - i : null;
+          p.style.webkitTransform = p.style.transform = 'translate3d(' + x + 'px,0,0)';
+          if (i <= inIndex) {
+            l = p;
+          }
+          // record where we stop being right aligned so we can stop z-stacking
+          right = right && this.panelIsRightAligned(p);
+        }
+      },
+      // TODO(sorvell): it's unsatisfying that we need a specific class to 
+      // determine right alignment because this defeats applying rightness via
+      // selectors (e.g. :last-child or media queries). We could look for 
+      // computed style right == 0 but this seems more brittle.
+      panelIsRightAligned: function(inNode) {
+        return !this.panels.narrowLayout && inNode &&
+            inNode.classList.contains('right');
+      }
+    });
+  </script>
+</element>
+
+
+<!--
+Copyright 2012 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+ /**
+  * g-panels is used to display a list of elements that can be selected.
+  * The attribute "selected" indicates which element is being selected.
+  * Typically only the selected element is displayed. By default, elements
+  * inside g-panels fit to its size.
+  *
+  * When the selected panel changes, a transition occurs between the current
+  * and new selection. The transition property specifies an element that
+  * manages the selected transition. The 'keyframe' transition uses css
+  * animations to manage trasnitions. A number of different classes can be
+  * applied to g-panels to customize the css animations used for a keyframe
+  * transition:
+  *
+  * * g-panels-hslide, g-panels-vslide
+  * * g-panels-hslideover, g-panels-vslideover
+  * * g-panels-explode
+  * * g-panels-scale-slide
+  * * g-panels-fly-up-right
+  *
+  * The 'flow' transition moves horizontally to reveal content.
+  *
+  * Example:
+  *
+  *     <g-panels selected="bar" transition="keyframe" class="g-panels-explode">
+  *       <section name="foo">Panel 1</section>
+  *       <section name="bar">Panel 2</section>
+  *       <section name="baz">Panel 3</section>
+  *    </g-panels>
+  *
+  * @class g-panels
+  */
+ /**
+  * Fired when an element is selected via tap.
+  *
+  * @event select
+  * @param {Object} inDetail
+  *   @param {Object} inDetail.selected the selected element
+  *   @param {Object} inDetail.index the index in the list of elements
+  */
+ /**
+  * Fired when an element is about to be selected. Call the preventSelect
+  * to prevent the selection.
+  * @event canSelect
+  * @param {Object} inDetail
+  *   @param {Object} inDetail.selected the selected element
+  *   @param {Object} inDetail.item the selected element
+  *   @param {Function} inDetail.preventSelect call to prevent selection
+  */
+  -->
+<link rel="import" href="panel-transitions/g-panel-transition.html">
+<link rel="import" href="panel-transitions/g-keyframe-panel-transition.html">
+<link rel="import" href="panel-transitions/g-flow-panel-transition.html">
+<element name="g-panels" attributes="transition selected index autoselect" 
+         on-keydown="keydownHandler">
+<link rel="stylesheet" href="css/g-panels.css" />
+<link rel="stylesheet" toolkit-scope="global" href="css/g-panels-global.css" />
+<link rel="stylesheet" toolkit-scope="controller" href="css/g-panels-controller.css" />
+<template>
+  <content id="content" select="*"></content>
+</template>
+<script>
+  // TODO(sorvell): promote this and figure out canonical way to do this;
+  // and support contenteditable.
+  var documentIsEditing = function() {
+    var a = document.activeElement;
+    if (a.tagName == "INPUT" || a.tagName == "SELECT" || a.tagName == "TEXTAREA") {
+      return true;
+    }
+  }
+  
+  // TODO(sorvell): need key table
+  var RIGHT_ARROW_KEY = 39;
+  var LEFT_ARROW_KEY = 37;
+  
+  var element = this;
+  
+  Toolkit.register(this, {
+    /**
+     * The type of transition g-panels should use to change between selected
+     * panels. The transition property corresponds to an element that is used
+     * to manage panel transitions. If it's not a custom element name,
+     * transition is converted into g-<transition>-panel-transition.
+     *
+     * @attribute transition
+     * @type string
+     * @default keyframe
+     *
+
+     */
+    transition: 'keyframe',
+    /**
+     * The selected panel to select. Panels are identify by either their name
+     * or id attributes. If this value is unset, then when g-panels is created
+     * its first panel will be selected.
+     *
+     * @attribute selected
+     * @type string
+     * @default null
+     */
+    selected: null,
+    index: 0,
+    autoSelect: false,
+    defaultTransition: 'keyframe',
+    _canTransition: false,
+    ready: function() {
+      Toolkit.installControllerStyles(this, element);
+      this.initPanels();
+      if (!this.hasAttribute('tabindex')) {
+        this.tabIndex = -1;
+      }
+      this.refreshWhenInserted();
+    },
+    initPanels: function() {
+      this.getPanels().forEach(function(p, i) {
+        this.initPanel(p, i);
+      }, this);
+    },
+    /**
+     * Extendors can implement initPanel to initialize the panels in a g-panels.
+     * @method initPanel
+     * @param inPanel The panel to initialize.
+     * @param inIndex The index of the panel.
+     */
+    initPanel: function(inPanel, inIndex) {},
+    indexChanged: function(inOldValue) {
+      var i = this.clampIndex(this.index);
+      if (!this.canSelect(i)) {
+        this.index = inOldValue;
+        console.log('cannot select')
+        return;
+      }
+      if (i != this.index) {
+        this.index = i;
+      }
+      if (this.index != this.lastIndex) {
+        var fromPanel = this.panelAtIndex(this.lastIndex),
+            toPanel = this.panelAtIndex(this.index),
+            forward = Boolean(this.index > this.lastIndex);
+        if (!this.transitionNode) {
+          this.transitionChanged();
+        }
+        if (this.canTransition(fromPanel, toPanel, forward)) {
+          this.beginTransition(fromPanel, toPanel, forward);
+        } else {
+          this.finishTransition(fromPanel, toPanel, forward);
+        }
+        this.lastIndex = this.index;
+        this.selected = this.getSelectedValue();
+      }
+    },
+    canSelect: function(inIndex) {
+      var canSelect = true;
+      // TODO(sorvell): dirtyCheck before we sent the canSelect event since
+      // it's likely that the decision needs to rely on binding state.
+      // consider doing this in g-component.send.
+      dirtyCheck();
+      this.send('canselect', {
+        index: inIndex, 
+        selected: this.selectedValueForIndex(inIndex),
+        preventSelect: function() {
+          canSelect = false;
+        }
+      });
+      return canSelect;
+    },
+    clampIndex: function(inIndex) {
+      var i = isNaN(inIndex) ? 0 : inIndex;
+      return Math.max(0, Math.min(this.count-1, i));
+    },
+    getSelectedValue: function() {
+      var selected = this.getSelectedPanel();
+      return this.selectedValueForPanel(selected);
+    },
+    selectedValueForPanel: function(inPanel) {
+      var name = inPanel && (inPanel.getAttribute('id') ||
+          inPanel.getAttribute('name'));
+      return name || this.indexOf(inPanel);
+    },
+    selectedValueForIndex: function(inIndex) {
+      var panel = this.panelAtIndex(inIndex);
+      return this.selectedValueForPanel(panel);
+    },
+    // selected is the name property of the panel to select
+    selectedChanged: function(inOldValue) {
+      var index = this.indexOfPropValue('id', this.selected);
+      index = index >= 0 ? index : this.indexOfPropValue('name', this.selected);
+      index = index >= 0 ? index : Number(this.selected);
+      if (index >= 0) {
+        this.index = index;
+      }
+    },
+    transitionChanged: function(inOldValue) {
+      var userTransition = this.findTransitionNode();
+      if (userTransition) {
+        this.transitionNode = userTransition;
+      } else {
+        if (this.transitionNode) {
+          if (this.transitionNode.localName == 
+              this.tagNameForTransition(this.transition)) {
+            return;
+          }
+          this.transitionNode.teardown();
+        }
+        this.transitionNode = this.makeTransitionNode(this.transition);
+        this.setAttribute('transition', this.transition);
+      }
+      this.transitionNode.setup(this);
+      this.refresh();
+    },
+    findTransitionNode: function() {
+      var n$ = this.$.content.getDistributedNodes();
+      for (var i=0, n; n=n$[i]; i++) {
+        if (this.isTransitionNode(n)) {
+          return n;
+        }
+      };
+    },
+    isTransitionNode: function(inNode) {
+      return inNode && (inNode.nodeType == Node.ELEMENT_NODE) &&
+        inNode.localName.match(/^g-.*panel-transition$/);
+    },
+    makeTransitionNode: function(inName) {
+      var name = this.tagNameForTransition(inName);
+      var transition = document.createElement(name);
+      return transition.setup ? transition :
+          this.makeTransitionNode(this.defaultTransition);
+    },
+    tagNameForTransition: function(inName) {
+      return 'g-' + inName + (inName ? '-' : '') + 'panel-transition';
+    },
+    indexOfPropValue: function(inProp, inValue) {
+      var c$ = this.getPanels();
+      for (var i=0, c; c=c$[i]; i++) {
+        if (c.getAttribute(inProp) == inValue) {
+          return i;
+        }
+      }
+      return -1;
+    },
+    panelAtName: function(inName) {
+      return this.panelAtIndex(this.indexOfName(inName));
+    },
+    canTransition: function(inFrom, inTo, inForward) {
+      return this._canTransition && Boolean(this.transitionNode && inFrom && inTo &&
+          this.transitionNode.canTransition(inFrom, inTo, inForward));
+    },
+    beginTransition: function(inFrom, inTo, inForward) {
+      if (this.transitionNode) {
+        this.transitionNode.stop();
+      }
+      //console.time('transition: ' + this.transition + ', ' + this.className);
+      requestAnimationFrame(function() {
+        this.enablePanelShowing(inFrom, true);
+        this.enablePanelShowing(inTo, true);
+        if (this.showByZ) {
+          this.applyZ(inFrom, this.topZ);
+          this.applyZ(inTo, this.topZ - 1);
+        }
+        this.transitionNode.go(inFrom, inTo, inForward);
+      }.bind(this));
+    },
+    finishTransition: function(inFrom, inTo, inForward) {
+      if (!this.canTransition(inFrom, inTo, inForward)) {
+        this.transitionNode.refresh();
+      }
+      this.ensureSelectedShowing();
+      //console.timeEnd('transition: ' + this.transition + ', ' + this.className);
+      this.asend('select', {selected: this.selected, index: this.index});
+    },
+    keydownHandler: function(e) {
+      if (this.autoselect && !documentIsEditing()) {
+        var oldIndex = this.index;
+        if (e.keyCode == RIGHT_ARROW_KEY) {
+          this.next();
+        } else if (e.keyCode == LEFT_ARROW_KEY) {
+          this.previous();
+        }
+        // TODO(sorvell): dirtyCheck so we know syncronously if index changed.
+        dirtyCheck();
+        if (this.index != oldIndex) {
+          e.cancelBubble = true;
+          this.focus();
+        }
+      }
+    },
+    refresh: function() {
+      if (this.transitionNode && this.transitionNode.canTransition()) {
+        this.transitionNode.refresh();
+        this.ensureSelectedShowing();
+      }
+    },
+    // TODO(sorvell): need to refresh when inserted into DOM,
+    // in lieu of that event, do so in WebComponentsReady.
+    refreshWhenInserted: function() {
+      var ready = 'WebComponentsReady';
+      var fn = function() {
+        // process pending changes so panels don't transition when inserted.
+        dirtyCheck();
+        this.indexChanged();
+        this.selectedChanged();
+        this.enableTransitions(true);
+        document.removeEventListener(ready, fn);
+      }.bind(this);
+      document.addEventListener(ready, fn);
+    },
+    ensureSelectedShowing: function() {
+      if (this.transitionNode.highlander) {
+        this.getPanels().forEach(function(p, i) {
+          if (this.showByZ) {
+            this.applyZ(p, i == this.index ? this.topZ : 0);
+          } else {
+            this.enablePanelShowing(p, i == this.index);
+          }
+        }, this);
+      }
+    },
+    // TODO(sorvell): this is an experimental mode where panels are 
+    // shown by altering z-index... will probably either be removed
+    // or used exclusively.
+    showByZ: false,
+    topZ: 2,
+    applyZ: function(inNode, inZ) {
+      inNode.style.zIndex = inZ;
+    },
+    enableTransitions: function(inEnable) {
+      return this._canTransition = inEnable;
+    },
+    // note: cannot use hidden attr for this since it's trumped by display
+    // setting e.g. hidden + display: -webkit-flex == showing.
+    enablePanelShowing: function(inPanel, inEnable) {
+      if (inPanel) {
+        inPanel.style.display = inEnable ? null : 'none';
+      }
+    },
+    /**
+     *
+     * Get the panel elements inside the g-panels.
+     *
+     * @method getPanels
+     * @returns {Array}
+     */
+    getPanels: function() {
+      var n$ = this.$.content.getDistributedNodes();
+      var excluded = ['style', 'template'];
+      return Array.prototype.filter.call(n$, function(c) {
+        return (c.nodeType == Node.ELEMENT_NODE) && (excluded.indexOf(c.localName) < 0)
+          && !this.isTransitionNode(c);
+      }.bind(this));
+    },
+    /**
+     * The number of panel elements inside the g-panels
+     *
+     * @attribute count
+     * @returns {Number}
+     */
+    get count() {
+      return this.getPanels().length;
+    },
+    /**
+     * Returns the currently selected panel
+     * @method getSelectedPanel
+     * @returns {Object}
+     */
+    getSelectedPanel: function() {
+      return this.getPanels()[this.index];
+    },
+    /**
+     *  Returns the index of given panel element.
+     *
+     * @method indexOf
+     * @param inPanel
+     * @returns {Number}
+     */
+    indexOf: function(inPanel) {
+      return this.getPanels().indexOf(inPanel);
+    },
+    /**
+     * Returns the panel element at the given index in the list of panels
+     *
+     * @method panelAtIndex
+     * @param inIndex
+     * @returns {Object}
+     */
+    panelAtIndex: function(inIndex) {
+      return this.getPanels()[inIndex];
+    },
+    /**
+     * Selects the next panel in the list of panel elements.
+     *
+     * @method next
+     */
+    next: function() {
+      this.index++;
+    },
+    /**
+     * Selects the previous panel in the list of panel elements.
+     *
+     * @method previous
+     */
+    previous: function() {
+      this.index--;
+    },
+    /**
+     * Toggles the selected panel between two values
+     *
+     * @method toggleBetween
+     * @param inA
+     * @param inB
+     */
+    toggleBetween: function(inA, inB) {
+      this.selected = this.selected == inA ? inB : inA;
+    },
+    // TODO(sorvell): temporary api; this needs to be automated
+    panelAdded: function(inPanel) {
+      this.transitionNode.setupPanel(inPanel);
+      this.refresh();
+    }
+  });
+</script>
+</element>
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+* Toolkit Elements
+* @module Toolkit Elements
+* @main Toolkit Elements
+*/  
+/**
+ * g-icon is a 24x24 glyph expressed as a background-image.
+ *
+ * Example:
+ *
+ *     <g-icon src="star.png"></g-icon>
+ *
+ * Optionally can use other size like 32x32 by setting the attribute "size" to "32":
+ *
+ *     <g-icon src="big_star.png" size="32"></g-icon>
+ *
+ * @class g-icon
+ */
+-->
+<element name="g-icon" attributes="src size">
+  <template>
+    <style>
+      @host {
+        * {
+          display: inline-block;
+        }
+      }
+
+      #icon {
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 100% 100%;
+      }
+    </style>
+    <div id="icon" style="background-image:url({{src}}); width:{{size}}px; height:{{size}}px"></div>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      /**
+       * The URL of an image for the icon.
+       *
+       * @attribute src
+       * @type string
+       * @default ''
+       */
+      src: '',
+      /**
+       * Specifies the size of the icon.
+       *
+       * @attribute size
+       * @type string
+       * @default 24
+       */
+      size: 24
+    });
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+
+/**
+ * g-menu-item is intended for use in a g-menu.
+ *
+ * @class g-menu-item
+ */
+-->
+<link rel="import" href="g-icon.html">
+<element name="g-menu-item" attributes="src label iconsize">
+  <template>
+    <style>
+      .label {
+        margin: 0 15px;
+      }
+
+      g-icon, .label, .label > * {
+        display: inline-block;
+        vertical-align: middle;
+      }
+    </style>
+    <g-icon src="{{src}}" size="{{iconsize}}"></g-icon>
+    <div class="label">
+      <span>{{label}}</span>
+      <content></content>
+    </div>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      /**
+       * The URL of an image for the icon.
+       *
+       * @attribute src
+       * @type string
+       * @default ''
+       */
+      src: '',
+      /**
+       * Specifies the label for the menu item.
+       *
+       * @attribute label
+       * @type string
+       * @default ''
+       */
+      label: '',
+      /**
+       * Specifies the size of the icon.
+       *
+       * @attribute size
+       * @type string
+       * @default 24
+       */
+      iconsize: 24
+    });
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+-->
+<element name="g-selection" attributes="multi">
+  <template>
+    <style>
+      @host {
+        * {
+          display: none !important;
+        }
+      }
+    </style>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      multi: false,
+      ready: function() {
+        this.clear();
+      },
+      clear: function() {
+        this.selection = [];
+      },
+      getSelection: function() {
+        return this.multi ? this.selection : this.selection[0];
+      },
+      isSelected: function(inItem) {
+        return this.selection.indexOf(inItem) >= 0;
+      },
+      setItemSelected: function(inItem, inIsSelected) {
+        if (inIsSelected) {
+          this.selection.push(inItem);
+        } else {
+          var i = this.selection.indexOf(inItem);
+          if (i >= 0) {
+            this.selection.splice(i, 1);
+          }
+        }
+        // TODO(sjmiles): consider replacing with summary
+        // notifications (asynchronous job)
+        this.asend("select", {isSelected: inIsSelected, item: inItem});
+      },
+      select: function(inItem) {
+        if (this.multi) {
+          this.toggle(inItem);
+        } else if (this.getSelection() !== inItem) {
+          this.setItemSelected(this.getSelection(), false);
+          this.setItemSelected(inItem, true);
+        }
+      },
+      toggle: function(inItem) {
+        this.setItemSelected(inItem, !this.isSelected(inItem));
+      }
+    });
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+/**
+ * g-selector is used to display a list of elements that can be selected.
+ * The attribute "selected" indicates which element is being selected.
+ * Tapping on the element to change selection would fire "activate"
+ * event.
+ *
+ * Example:
+ *
+ *     <g-selector selected="0" on-activate="activateHandler">
+ *       <div>Item 1</div>
+ *       <div>Item 2</div>
+ *       <div>Item 3</div>
+ *     </g-selector>
+ *
+ * g-selector is not styled.  So one needs to use "selected" CSS class
+ * to style the selected element.
+ * 
+ *     <style>
+ *       .item.selected {
+ *         background: #eee;
+ *       }
+ *     </style>
+ *     ...
+ *     <g-selector>
+ *       <div class="item">Item 1</div>
+ *       <div class="item">Item 2</div>
+ *       <div class="item">Item 3</div>
+ *     </g-selector>
+ *
+ * @class g-selector
+ */
+/**
+ * Fired when an element is selected via tap.
+ * 
+ * @event activate
+ * @param {Object} inDetail
+ *   @param {Object} inDetail.item the selected element
+ */
+-->
+<link rel="import" href="g-selection.html">
+<element name="g-selector" on-tap="activateHandler" attributes="selected multi
+         valueattr selectedClass selectedModel">
+  <template>
+    <g-selection id="selection" multi="{{multi}}" on-select="selectionSelect"></g-selection>
+    <content id="items" select="*"></content>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      /**
+       * Gets or sets the selected element.  Default is to use the index
+       * of the currently selected element.
+       *
+       * If you want a specific attribute value of the selected element to be
+       * used instead of index, set "valueattr" to that attribute name.
+       *
+       * Example:
+       *
+       *     <g-selector valueattr="label" selected="foo">
+       *       <div label="foo"></div>
+       *       <div label="bar"></div>
+       *       <div label="zot"></div>
+       *     </g-selector>
+       *
+       * @attribute selected
+       * @type string
+       * @default null
+       */
+      selected: null,
+      /**
+       * If true, multiple selections are allowed.
+       *
+       * @attribute multi
+       * @type boolean
+       * @default false
+       */
+      multi: false,
+      /**
+       * Specifies the attribute to be used for "selected" attribute.
+       *
+       * @attribute valueattr
+       * @type string
+       * @default 'name'
+       */
+      valueattr: 'name',
+      /**
+       * Specifies the CSS class to be used to add to the selected element.
+       * 
+       * @attribute selectedClass
+       * @type string
+       * @default 'selected'
+       */
+      selectedClass: 'selected',
+      /**
+       * Returns the model associated with the selected element.
+       * 
+       * @attribute selectedModel
+       * @type Object
+       * @default null
+       */
+      selectedModel: null,
+      ready: function() {
+        this.setAttribute('touch-action', 'none');
+      },
+      get items() {
+        return this.$.items.getDistributedNodes();
+      },
+      get selection() {
+        return this.$.selection.getSelection();
+      },
+      valueForNode: function(inNode) {
+        return inNode[this.valueattr] || inNode.getAttribute(this.valueattr);
+      },
+      valueToIndex: function(inValue) {
+        // find an item with value == inValue and return it's index
+        for (var i=0, items=this.items, c; (c=items[i]); i++) {
+          if (this.valueForNode(c) == inValue) {
+            return i;
+          }
+        }
+        // if no item found, the value itself is probably the index
+        return inValue;
+      },
+      selectedChanged: function() {
+        this.valueToSelection(this.selected);
+      },
+      valueToSelection: function(inValue) {
+        var item = this.items[this.valueToIndex(inValue)];
+        if (item) {
+          this.$.selection.select(item);
+          var t = item.templateInstance;
+          this.selectedModel = t ? t.model : undefined;
+        } else {
+          this.selectedModel = null;
+        }
+      },
+      // events fired from <g-selection> object
+      selectionSelect: function(inEvent, inInfo) {
+        if (inInfo.item) {
+          inInfo.item.classList.toggle(this.selectedClass, inInfo.isSelected);
+        }
+      },
+      // event fired from host
+      activateHandler: function(inEvent) {
+        var items = this.items;
+        var i = Toolkit.findDistributedTarget(inEvent.target, items);
+        if (i >= 0) {
+          var selected = this.valueForNode(items[i]) || i;
+          if (this.multi) {
+            this.valueToSelection(selected);
+          } else {
+            this.selected = selected;
+          }
+          this.asend('activate', {item: items[i]});
+        }
+      }
+    });
+  </script>
+</element>
+
+<!--
+ Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ Use of this source code is governed by a BSD-style
+ license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+/**
+ * g-ribbon is a g-selector styled to look like a sidebar menu.
+ * Use it in conjunction with g-menu-item.
+ *
+ * Example:
+ *
+ *     <g-ribbon selected="0" label="Google">
+ *       <g-menu-item src="home.png">Home</g-menu-item>
+ *       <g-menu-item src="topics.png">Topics</g-menu-item>
+ *       <g-menu-item src="accounts.png">Accounts</g-menu-item>
+ *       <g-menu-item src="explore.png">Explore</g-menu-item>
+ *     </g-ribbon>
+ *
+ * @class g-ribbon
+ * @extends g-selector
+ */
+-->
+<link rel="import" href="g-selector.html"/>
+<element name="g-ribbon" extends="g-selector" attributes="label">
+  <template>
+    <style>
+      @host {
+        * {
+          display: -webkit-box;
+          display: -webkit-flex;
+          display: flex;
+          -webkit-box-orient: vertical;
+          -webkit-flex-flow: column;
+          flex-direction: column;
+          background: #333 url(images/ribbon_bg.png) repeat-y;
+          box-shadow: inset -5px 0px 8px rgba(0, 0, 0, 0.4);
+          color: white;
+          font-size: 15px;
+        }
+      }
+      
+      .ribbon-label {
+        height: 60px;
+        line-height: 60px;
+        padding-left: 30px;
+        font-size: 21px;
+        color: white;
+      }
+      
+      .ribbon-divider {
+        height: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-top: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.025);
+      }
+      
+      .menu {
+        -webkit-box-flex: 1;
+        -webkit-flex: 1;
+        flex: 1;
+        overflow: auto;
+      }
+      
+      /*@polyfill g-menu-item */
+      shadow::-webkit-distributed(g-menu-item) {
+        display: block;
+        box-sizing: border-box;
+        -moz-box-sizing: border-box;
+        padding: 12px 14px;
+        margin: 10px 14px;
+        border: 1px solid transparent;
+        border-radius: 3px;
+        opacity: 0.7;
+        cursor: pointer;
+        -webkit-user-select: none;
+      }
+      
+      /*@polyfill g-menu-item.selected */
+      shadow::-webkit-distributed(g-menu-item.selected) {
+        background-color: rgba(0,0,0,0.5);
+        border: 1px solid #3D3D3D;
+        opacity: 1;
+      }
+      
+      /*@polyfill g-menu-item.selected:before */
+      shadow::-webkit-distributed(g-menu-item.selected:before) {
+        content: "";
+        position: absolute;
+        margin-top: 6px;
+        right: 0;
+        width: 0; 
+        height: 0; 
+        border-top: 10px solid transparent;
+        border-bottom: 10px solid transparent; 
+        border-right: 10px solid white; 
+      }
+    </style>
+    <div class="ribbon-label">{{label}}</div>
+    <div class="ribbon-divider"></div>
+    <div class="menu">
+      <shadow></shadow>
+    </div>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      /**
+       * Label to put on the top portion of ribbon.
+       *
+       * @attribute label
+       * @type string
+       * @default ''
+       */
+      label: ''
+    });
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+/**
+ * g-toolbar is a horizontal bar containing elements that can perform actions.
+ *
+ * Example:
+ *
+ *     <g-toolbar>
+ *       <g-icon-button src="menu.png" on-click="menuAction"></g-icon-button>
+ *       <div class="flex">Title</div>
+ *       <g-icon-button src="more.png" on-click="moreAction"></g-icon-button>
+ *     </g-toolbar>
+ *
+ * @class g-toolbar
+ */
+-->
+<element name="g-toolbar" attributes="responsive">
+  <template>
+    <style>
+      .toolbar {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-align: center;
+        -webkit-align-items: center;
+        align-items: center;
+        min-height: 60px;
+        background-color: whitesmoke;
+        box-shadow: inset 0px 0px 3px rgba(255, 255, 255, 1);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.28);
+      }
+      
+      /* toolbars can be made plain and nested toolbars are unstyled by default */
+      /* TODO(ffu): use :scope when it is available */
+      .toolbar[responsive=true] {
+        box-shadow: none;
+        border-bottom: 0;
+      }
+      
+      /*@polyfill .toolbar > *:not(g-toolbar) */
+      ::-webkit-distributed(:not(g-toolbar)) {
+        margin: 0 10px;
+      }
+      
+      /*@polyfill .toolbar > .flex */
+      ::-webkit-distributed(.flex) {
+        -webkit-box-flex: 1;
+        -webkit-flex: 1;
+        flex: 1;
+      }
+      
+      /* TODO(ffu): ad hoc, replace with a more thoughtful set of responsive rules */
+      @media screen and (max-width: 800px) {
+        .toolbar[responsive=true] {
+          position: fixed;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          z-index: 1;
+          background-color: whitesmoke;
+          border: 0;
+          border-top: 1px solid rgba(0, 0, 0, 0.28);
+        }
+        
+        /*@polyfill .toolbar > *.hidden-narrow */
+        ::-webkit-distributed(.hidden-narrow) {
+          display: none;
+        }
+      }
+    </style>
+    <div class="toolbar" responsive="{{responsive}}">
+      <content></content>
+    </div>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      responsive: false,
+      ready: function() {
+        this.setAttribute('touch-action', 'none');
+      }
+    });
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+/**
+ * g-icon-button enables you to place an image centered in a button.
+ *
+ * Example:
+ *
+ *     <g-icon-button src="star.png"></g-icon-button>
+ *
+ * @class g-icon-button
+ */
+-->
+<link rel="import" href="g-icon.html">
+<element name="g-icon-button" attributes="src active">
+  <template>
+    <style>
+      @host {
+        * {
+          display: inline-block;
+          position: relative;
+          box-sizing: border-box;
+          -moz-box-sizing: border-box;
+          width: 44px;
+          height: 44px;
+          padding: 10px;
+          cursor: pointer;
+          border: none;
+          background-color: rgba(0, 0, 0, 0);
+          background-position: top left;
+          background-size: cover;
+          background-repeat: no-repeat;
+          background-image: url("images/btn_light.png");
+          background-position: 0 0;
+        }
+        
+        *:hover {
+          background-position: 0 -44px;
+        }
+        
+        *.selected {
+          background-position: 0 -88px;
+        }
+        
+        *:active, *.selected:active {
+          background-position: 0 -132px;
+        }
+      }
+    </style>
+    <g-icon src="{{src}}"></g-icon>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      /**
+       * The URL of an image for the icon.
+       *
+       * @attribute src
+       * @type string
+       * @default ''
+       */
+      src: '',
+      /**
+       * If true, border is placed around the button to indicate
+       * active state.
+       *
+       * @attribute active
+       * @type boolean
+       * @default false
+       */
+      active: false,
+      activeChanged: function() {
+        // TODO(sjmiles): 'class' attributes should have special handling 
+        //   for this common use case
+        this.classList.toggle('selected', this.active);
+      }
+    });
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+/**
+ * g-overlay displays overlayed on top of other content. It starts out
+ * hidden and is displayed by setting it's opened property
+ * to true. A g-overlay's opened state can be toggled by calling the toggle
+ * method.
+ * 
+ * It's common to want a g-overlay to animate to its opened position. A number
+ * of helper css classes provide some basic open/close animations. For example,
+ * assigning the class g-overlay-fade to a g-overlay will make it fade into 
+ * and out of view as it opens and closes. Note, if multiple g-overlay's are
+ * opened, they should stack on top of each other.
+ * 
+ * Styling: The size and position of a g-overlay should be setup via css.
+ * g-overlay is natually sized around its content. When a g-overlay is opened
+ * it is shown and the 'opened' class is added to it. This is typically where
+ * css transitions and animations are applied. When the g-overlay is closed,
+ * the 'opened' class is removed and a 'closing' class is added. Use 'closing'
+ * to customize the closing animation. 
+ * 
+ * Classes for animating g-overlay:
+ * 
+ * * g-overlay-fade: fade in/out when opened/closed
+ * * g-overlay-scale-slideup: open: fade in and shrink; close: slide up
+ * * g-overlay-shake: open: fly in and shake; close: shake and fly out.
+ *
+ * It's common to use g-overlay to gather user input, for example a login
+ * dialog. To facilitate this, g-overlay supports automatic focusing of a 
+ * specific element when it's opened. The element to be focused should be given
+ * an autofocus attribute.
+ * 
+ * An element that should close the g-overlay will automatically do so if it
+ * is given the overlay-toggle attribute. Please note that g-overlay will 
+ * close whenever the user taps outside it or presses the escape key. The 
+ * behavior can be turned off via the autoCloseDisabled property.
+ * 
+ *     <g-overlay class="g-overlay-scale-slideup">
+ *	     <h2>Dialog</h2>
+ *       <input placeholder="say something..." autofocus"></input>
+ *       <div>I agree with this wholeheartedly.</div>
+ *       <button overlay-toggle>OK</button>
+ *     </g-overlay>
+ * 
+ * 
+ * @class g-overlay
+ */
+/**
+ * Fired when the g-overlay opened property is set.
+ * 
+ * @event open
+ * @param {Object} inDetail
+ * @param {Object} inDetail.opened the opened state
+ */
+-->
+<element name="g-overlay" 
+         attributes="opened autoCloseDisabled" 
+         on-webkitAnimationStart="openedAnimationStart"
+         on-animationStart="openedAnimationStart"
+         on-webkitAnimationEnd="openedAnimationEnd"
+         on-animationEnd="openedAnimationEnd"
+         on-webkitTransitionEnd="openedTransitionEnd"
+         on-transitionEnd="openedTransitionEnd"
+         on-tap="tapHandler"
+         on-keydown="keydownHandler"
+         >
+<link rel="stylesheet" href="css/g-overlay.css">
+<link rel="stylesheet" toolkit-scope="global" href="css/g-overlay-global.css">
+<template>
+  <content></content>
+</template>
+<script>
+  // TODO(sorvell): need keyhelper component.
+  var ESCAPE_KEY = 27;
+  
+  // track overlays for z-index and focus managemant
+  var overlays = [];
+  var trackOverlays = function(inOverlay) {
+    if (inOverlay.opened) {
+      var z0 = currentOverlayZ();
+      overlays.push(inOverlay);
+      var z1 = currentOverlayZ();
+      if (z1 <= z0) {
+        applyOverlayZ(inOverlay, z0);
+      } 
+    } else {
+      var i = overlays.indexOf(inOverlay);
+      if (i >= 0) {
+        overlays.splice(i, 1);
+        setZ(inOverlay, null);
+      }
+    }
+  }
+  
+  var applyOverlayZ = function(inOverlay, inAboveZ) {
+    setZ(inOverlay, inAboveZ + 2);
+  }
+  
+  var setZ = function(inNode, inZ) {
+    inNode.style.zIndex = inZ;
+  }
+
+  var currentOverlay = function() {
+    return overlays[overlays.length-1];
+  }
+  
+  var DEFAULT_Z = 10;
+  
+  var currentOverlayZ = function() {
+    var z;
+    var current = currentOverlay();
+    if (current) {
+      var z1 = window.getComputedStyle(current).zIndex;
+      if (!isNaN(z1)) {
+        z = Number(z1);
+      }
+    }
+    return z || DEFAULT_Z;
+  }
+  
+  var focusOverlay = function() {
+    var current = currentOverlay();
+    if (current) {
+      current.applyFocus();
+    }
+  }
+
+  Toolkit.register(this, {
+    /**
+     * Set opened to true to show an overlay and to false to hide it.
+     * A g-overlay may be made intially opened by setting its opened 
+     * attribute.
+     * @attribute opened
+     * @type boolean
+     * @default false
+     */
+    opened: false,
+    /**
+     * By default an overlay will close automatically if the user taps outside
+     * it or presses the escape key. Disable this behavior by setting the 
+     * autoCloseDisabled property to true.
+     * @attribute autoCloseDisabled
+     * @type boolean
+     * @default false
+     */
+    autoCloseDisabled: false,
+    timeout: 1000,
+    captureEventType: 'tap',
+    ready: function() {
+      if (this.tabIndex === undefined) {
+        this.tabIndex = -1;
+      }
+      this.setAttribute('touch-action', 'none');
+    },
+    /** 
+     * Toggle the opened state of the overlay.
+     * @method toggle
+     */
+    toggle: function() {
+      this.opened = !this.opened;
+    },
+    openedChanged: function() {
+      this.renderOpened();
+      trackOverlays(this);
+      if (!this.autoCloseDisabled) {
+        this.enableCaptureHandler(this.opened);
+      }
+      this.enableResizeHandler(this.opened);
+      this.send('opened', this.opened);
+    },
+    enableHandler: function(inEnable, inMethodName, inNode, inEventName, inCapture) {
+      var m = 'bound' + inMethodName;
+      this[m] = this[m] || this[inMethodName].bind(this);
+      
+      inNode[inEnable ? 'addEventListener' : 'removeEventListener'](
+        inEventName, this[m], inCapture);
+    },
+    enableResizeHandler: function(inEnable) {
+      this.enableHandler(inEnable, 'resizeHandler', window, 
+        'resize');
+    },
+    enableCaptureHandler: function(inEnable) {
+      this.enableHandler(inEnable, 'captureHandler', document, 
+        this.captureEventType, true);
+      if (window.PointerEventsPolyfill) {
+        if (inEnable) {
+          PointerEventsPolyfill.dispatcher.registerTarget(document);
+        } else {
+          PointerEventsPolyfill.dispatcher.unregisterTarget(document);
+        }
+      }
+    },
+    getFocusNode: function() {
+      return this.querySelector('[autofocus]') || this;
+    },
+    // TODO(sorvell): nodes stay focused when they become un-focusable due to
+    // an ancestory becoming display: none; file bug.
+    applyFocus: function() {
+      var focusNode = this.getFocusNode();
+      if (this.opened) {
+        focusNode.focus();
+      } else {
+        focusNode.blur();
+        focusOverlay();
+      }
+    },
+    renderOpened: function() {
+      this.classList.remove('closing');
+      this.classList.add('revealed');
+      // continue styling after delay so display state can change without
+      // aborting transitions
+      this.asyncMethod('continueRenderOpened');
+    },
+    continueRenderOpened: function() {
+      this.classList.toggle('opened', this.opened);
+      this.classList.toggle('closing', !this.opened);
+      //this.animating = this.asyncMethod('completeOpening', null, this.timeout);
+    },
+    completeOpening: function() {
+      //clearTimeout(this.animating);
+      this.animating = null;
+      this.classList.remove('closing');
+      this.classList.toggle('revealed', this.opened);
+      this.applyFocus();
+    },
+    openedAnimationEnd: function(e) {
+      if (!this.opened) {
+        this.classList.remove('animation');
+      }
+      // same steps as when a transition ends
+      this.openedTransitionEnd(e);
+    },
+    openedTransitionEnd: function(e) {
+      // TODO(sorvell): Necessary due to 
+      // https://bugs.webkit.org/show_bug.cgi?id=107892
+      // Remove when that bug is addressed.
+      if (e.target == this) {
+        this.completeOpening();
+        e.stopPropagation();
+        e.cancelBubble = true;
+      }
+    },
+    openedAnimationStart: function(e) {
+      this.classList.add('animation');
+      e.stopPropagation();
+      e.cancelBubble = true;
+    },
+    tapHandler: function(e) {
+      if (e.target && e.target.hasAttribute('overlay-toggle')) {
+        this.toggle();
+      } else {
+        if (this.autoCloseJob) {
+          this.autoCloseJob.stop();
+          this.autoCloseJob = null;
+        }
+      }
+    },
+    // TODO(sorvell): This approach will not work with modal. For this we need a
+    // scrim.
+    captureHandler: function(e) {
+      if (!this.autoCloseDisabled && (currentOverlay() == this) && (this 
+          != e.target) && !(this.compareDocumentPosition(e.target) &
+          Node.DOCUMENT_POSITION_CONTAINED_BY)) {
+        this.autoCloseJob = this.job(this.autoCloseJob, function() {
+          this.opened = false;
+        });
+      }
+    },
+    keydownHandler: function(e) {
+      if (!this.autoCloseDisabled && (e.keyCode == ESCAPE_KEY)) {
+        this.opened = false;
+        e.stopPropagation();
+        e.cancelBubble = true;
+      }
+    },
+    /**
+     * Extensions of g-overlay should implement the resizeHandler
+     * method to adjust the size and position of the overlay when the 
+     * browser window resizes.
+     * @method resizeHandler
+     */
+    resizeHandler: function() {
+    }
+  });
+</script>
+</element>
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+/**
+ * g-menu is a g-selector styled to look like a menu. Use it
+ * in conjunction with g-menu-item.
+ *
+ * Example:
+ *
+ *     <g-menu selected="email">
+ *       <g-menu-item name="post" src="images/comment.png">Post a Comment</g-menu-item>
+ *       <g-menu-item name="share" src="images/hangout.png">Share Link</g-menu-item>
+ *       <g-menu-item name="email" src="images/mail.png">Email Link</g-menu-item>
+ *       <g-menu-item name="favorite" src="images/favorite.png">Add to Favorites</g-menu-item>
+ *     </g-menu>
+ *
+ * @class g-menu
+ * @extends g-selector
+ */
+-->
+<link rel="import" href="g-selector.html">
+<element name="g-menu" extends="g-selector">
+  <template>
+    <style>
+      /*@polyfill g-menu-item */
+      shadow::-webkit-distributed(g-menu-item) {
+        display: block;
+        box-sizing: border-box;
+        -moz-box-sizing: border-box;
+        height: 40px;
+        line-height: 35px;
+        padding: 0 10px;
+        margin: 10px;
+        -webkit-transform: translate3d(0, 0, 0);
+        border-radius: 3px;
+        border: 1px solid transparent;
+        font-weight: bold;
+        font-size: 15px;
+        cursor: pointer;
+        white-space: nowrap;
+        opacity: .5;
+      }
+      
+      /* TODO(sorvell): please note, styling broken due to:
+      https://code.google.com/p/chromium/issues/detail?id=229667
+      */
+      /*@polyfill g-menu-item.selected */
+      shadow::-webkit-distributed(g-menu-item.selected) {
+        background: #f2f2f2;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        opacity: 0.9;
+      }
+    </style>
+    <shadow></shadow>
+  </template>
+  <script>
+    Toolkit.register(this);
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+-->
+<link rel="import" href="g-icon-button.html"/>
+<link rel="import" href="g-overlay.html">
+<link rel="import" href="g-menu.html"/>
+<element name="g-menu-button" attributes="src selected opened responsive valign">
+  <link rel="stylesheet" href="css/g-menu-button.css" />
+  <template>
+    <g-icon-button id="button" touch-action="none" on-tap="toggle" src="{{src}}" active="{{opened}}"></g-icon-button>
+    <div responsive="{{responsive}}" valign="{{valign}}">
+      <g-overlay id="overlay" class="slideup" opened="{{opened}}" modal>
+        <div class="arrow"></div>
+        <div class="arrow arrow-inner"></div>
+        <g-menu id="menu" selected="{{selected}}" on-activate="toggle">
+          <content select="*"></content>
+        </g-menu>
+      </g-overlay>
+    </div>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      src: '',
+      selected: '',
+      opened: false,
+      responsive: false,
+      valign: 'center',
+      //* Toggle the opened state of the dropdown.
+      toggle: function() {
+        this.opened = !this.opened;
+      },
+      //* Returns the selected item.
+      get selection() {
+        return this.$.menu.selection;
+      }
+    });
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<!--
+/**
+ * @module Toolkit Elements
+ */
+/**
+ * g-jsonp can be used to perform JSONP requests.
+ 
+ * Example:
+ *
+ *     <g-jsonp url="https://clients1.google.com/finance/info?q=GOOG&client=ig&callback="
+ *         on-response="handleResponse"></g-jsonp>
+ *
+ * @class g-jsonp
+ */
+/**
+ * Fired when a response is received.
+ *
+ * @event response
+ */
+-->
+<element name="g-jsonp" attributes="url response">
+  <script>
+    var JSONP_CALLBACK_FUNC_NAME = 'jsonp_callback_';
+    
+    var callbackId = 0;
+  
+    Toolkit.register(this, {
+      /**
+       * The URL target of the request.
+       * 
+       * @attribute url
+       * @type string
+       * @default ''
+       */
+      url: '',
+      /**
+       * Returns the response object.
+       *
+       * @attribute response
+       * @type Object
+       * @default null
+       */
+      response: null,
+      /**
+       * Performs a JSONP request to the url specified.
+       *
+       * @method go
+       */
+      go: function() {
+        if (!this.isInFlight()) {
+          this.callbackFunc = JSONP_CALLBACK_FUNC_NAME + callbackId++;
+          window[this.callbackFunc] = this.respond.bind(this);
+          url = this.url + this.callbackFunc + '&' + Math.random();
+          this.addScript(url);
+        }
+      },
+      isInFlight: function() {
+        return !!this.script;
+      },
+      urlChanged: function() {
+        if (this.url) {
+          this.go();
+        }
+      },
+      addScript: function(inSrc) {
+        this.script = document.createElement('script');
+        this.script.src = inSrc;
+        this.script.onerror = this.respond.bind(this);
+        var s = document.getElementsByTagName('script')[0];
+        s.parentNode.insertBefore(this.script, s);
+      },
+      removeScript: function() {
+        if (this.script.parentNode) {
+          this.script.parentNode.removeChild(this.script);
+        }
+        this.script = null;
+      },
+      respond: function(inResponse) {
+        this.response = inResponse;
+        this.removeScript();
+        delete window[this.callbackFunc];
+        this.send('response', {response: inResponse});
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<element name="g-speech-mic">
+  <template>
+    <style>
+      @host {
+        * {
+          display: inline-block;
+        }
+      }
+      
+      #mic {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: url(images/mic.png) center no-repeat;
+        cursor: pointer;
+      }
+      
+      #mic[recognizing=true] {
+        background-color: red;
+        -webkit-animation: zoom 0.75s linear infinite;
+      }
+      
+      @-webkit-keyframes zoom {
+        0% {-webkit-transform: scale(0.75);}
+        100% {-webkit-transform: scale(1);}
+      }
+    </style>
+    <div id="mic" recognizing="{{recognizing}}" on-click="micClick"></div>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      publish: {
+        lang: 'en-US',
+        transcript: ''
+      },
+      stop: function() {
+        this.recognition && this.recognition.stop();
+      },
+      // protected
+      ready: function() {
+        if (window.webkitSpeechRecognition) {
+          this.recognition = new webkitSpeechRecognition();
+          this.recognition.continuous = true;
+          this.recognition.interimResults = true;
+          this.recognition.lang = this.lang;
+          
+          this.recognition.onstart = this.start.bind(this);
+          this.recognition.onresult = this.result.bind(this);
+          this.recognition.onerror = this.error.bind(this);
+          this.recognition.onend = this.end.bind(this);
+        } else {
+          this.$.mic.hidden = true;
+        }
+      },
+      micClick: function() {
+        if (this.recognizing) {
+          this.recognition.stop();
+        } else {
+          this.recognition.start();
+        }
+      },
+      start: function(e) {
+        this.recognizing = true;
+      },
+      result: function(e) {
+        var t, ft = '', at = '';
+        for (var i = 0, r; r = e.results[i]; i++) {
+          t = r[0] && r[0].transcript || '';
+          ft = r.isFinal && t;
+          at += t;
+        }
+        this.transcript = t;
+        this.send('result', {results: e.results, transcript: t, 
+          finalTranscript: ft, allTranscript: at});
+      },
+      error: function(e) {
+      },
+      end: function(e) {
+        this.recognizing = false;
+      }
+    });
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<script src="coolclock.js"></script>
+<script src="moreskins.js"></script>
+<element name="x-coolclock">
+  <template>
+    <span id="clock">
+    </span>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      skin: 'Babosa',
+      ready: function() {
+        var skins = Object.keys(CoolClock.config.skins);
+        var i = Math.floor(Math.random() * skins.length);
+        this.skin = skins[i];
+        // TODO(sorvell): create the canvas element manually becase ios 
+        // does not render the canvas element if it is not created in the
+        // main document (component templates are created in a 
+        // different document). See:
+        // https://bugs.webkit.org/show_bug.cgi?id=109073.
+        var c = document.createElement('canvas');
+        c.classList.add('CoolClock:' + this.skin);
+        this.$.clock.appendChild(c);
+        // must be in dom to create clock and we may not be yet, so 
+        // create asynchronousely.
+        this.asyncMethod('createClock');
+      },
+      createClock: function() {
+        CoolClock.findAndCreateClocks(this.$.clock);
+      }
+    });    
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<link rel="import" href="../../toolkit/components/g-jsonp.html">
+<element name="x-stock" attributes="symbol autoupdate">
+  <template>
+    <style>
+      .stock-label {
+        font-family: arial,sans-serif;
+        font-size: medium;
+        font-weight: lighter;
+        color: #878787;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      
+      .large {
+        font-size: x-large;
+      }
+      
+      .small {
+        font-size: small;
+      }
+      
+      .stock-desc {
+        text-transform: uppercase;
+      }
+      
+      .quote {
+        margin-top: 10px;
+      }
+      
+      .price {
+        color: #212121;
+        margin-right: 10px;
+      }
+      
+      .change {
+        color: #3d9400;
+      }
+      
+      .change.down {
+        color: #dd4b39;
+      }
+      
+      .more {
+        margin-top: 20px;
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+      }
+      
+      .chart {
+        margin-right: 20px;
+      }
+      
+      .details {
+        width: 120px;
+      }
+      
+      .details > * {
+        line-height: 1.4;
+      }
+      
+      .details > * > :first-child {
+        display: inline-block;
+        width: 60px;
+      }
+      
+      @media screen and (max-width: 520px) {
+        .details {
+          display: none;
+        }
+      }
+    </style>
+    <div class="stock-label large">{{response.name}}</div>
+    <div class="stock-label stock-desc">{{response.e}}: {{symbol}}</div>
+    <div class="stock-label large quote">
+      <span class="price">{{response.l}}</span>
+      <span class="change {{change}}">{{response.c}} ({{response.cp}}%)</span>
+    </div>
+    <div class="more">
+      <div class="chart">
+        <img src="https://www.google.com/finance/chart?q={{response.e}}:{{symbol}}&amp;tlf=12&amp;chst=vks&amp;p=1d&amp;chs={{chartWidth}}x96&amp;chsc=1&amp;nocache={{random}}" />
+      </div>
+      <div class="stock-label small details">
+        <div><label>Open</label>{{response.op}}</div>
+        <div><label>High</label>{{response.hi}}</div>
+        <div><label>Low</label>{{response.lo}}</div>
+        <div><label>Volume</label>{{response.vo}}</div>
+        <div><label>Avg Vol</label>{{response.avvo}}</div>
+        <div><label>Mkt Cap</label>{{response.mc}}</div>
+      </div>
+    </div>
+    <g-jsonp id="jsonp" response="{{jsonpResponse}}"></g-jsonp>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      symbol: '',
+      updateinterval: 60000,
+      jsonpResponse:null,
+      ready: function() {
+        var mq = window.matchMedia('(max-width: 400px)');
+        mq.addListener(this.layoutChange.bind(this));
+        this.layoutChange(mq);
+      },
+      symbolChanged: function() {
+        if (this.symbol) {
+          this.go();
+        }
+      },
+      layoutChange: function(inQuery) {
+        this.chartWidth = inQuery.matches ? 256 : 327; 
+      },
+      go: function() {
+        this.$.jsonp.url = 'https://clients1.google.com/finance/info?q=' + this.symbol + '&client=ob&infotype=infoonebox&callback=';
+        this.$.jsonp.go();
+      },
+      autoupdateChanged: function() {
+        if (this.autoupdate) {
+          this.intervalId = setInterval(this.go.bind(this), this.updateinterval);
+        } else if (this.intervalId) {
+          clearInterval(this.intervalId);
+        }
+      },
+      jsonpResponseChanged: function() {
+        var r = this.response = this.jsonpResponse && this.jsonpResponse[0];
+        if (r) {
+          this.random = Math.random() * 10000;
+          this.change = Number(r.c) >= 0 ? 'up' : 'down';
+        }
+      }
+    });
+  </script>
+</element>
+
+<!--
+Copyright 2013 The Toolkitchen Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<link rel="import" href="../../toolkit/components/g-jsonp.html"/>
+<element name="wu-weather" attributes="autoupdate">
+  <template>
+    <style>
+      @host {
+        * {
+          font-family: arial,sans-serif;
+          font-size: medium;
+          font-weight: lighter;
+          color: #878787;
+        }
+      }
+      .location {
+        font-size: x-large;
+      }
+      .temperature, .weather {
+        font-size: large;
+        color: #000000;
+      }
+      .current-icon {
+        float: left;
+        margin-right: 10px;
+      }
+      .forecast {
+        clear: both;
+        margin-top: 10px;
+      }
+      .forecast-day {
+        display: inline-block;
+        padding: 5px;
+        text-align: center;
+      }
+      .forecast-day div {
+        font-size: small;
+      }
+    </style>
+    <h1 class="location">
+      {{current.display_location.full}}
+    </h1>
+    <template bind="{{current}}">
+      <img class="current-icon" src="{{icon_url}}">
+      <div class="weather">{{weather}}</div>
+      <div class="temperature">{{temperature_string}}</div>
+    </template>
+    <div class="forecast">
+      <template repeat="{{forecast.forecastday}}">
+        <div class="forecast-day">
+          <div class="date">{{date.weekday_short}}</div>
+          <img class="forecast-icon" src="{{icon_url}}" width="36px" height="36px">
+          <div class="high-low">
+            {{high.fahrenheit}}/{{low.fahrenheit}} &deg;F
+          </div>
+          <div class="high-low">
+            ({{high.celsius}}/{{low.celsius}} &deg;C)
+          </div>
+        </div>
+      </template>
+    </div>
+    <g-jsonp id="jsonp_current" handleAs="json" 
+        response="{{currentConditionsResponse}}"></g-jsonp>
+    <g-jsonp id="jsonp_forecast" handleAs="json"
+        response="{{forecastResponse}}"></g-jsonp>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      position: null,
+      currentConditionsResponse: null,
+      forecastResponse: null,
+      updateInterval: 60000,
+      apikey: '6d9e44e91f890cae',
+      position: {
+        coords: {
+          latitude: 37.773285,
+          longitude: -122.417725
+        }
+      },
+      ready: function() {
+        this.loadFromStorage();
+        this.autoupdateChanged();
+      },
+      loadFromStorage: function() {
+        var data = localStorage.getItem('wu-weather-data');
+        var cached = data && JSON.parse(data);
+        // Discard stored data if it's too old.
+        if (!cached ||
+            (new Date() - cached.timestamp) > (60 * 60 * 1000)) {
+          this.positionChanged();
+          this.updatePosition();
+          return;
+        }
+        this.current = cached.current;
+        this.forecast = cached.forecast;
+      },
+      saveToStorage: function() {
+        // Only store when we have all the data.
+        if (this.current && this.forecast) {
+          var data = {
+            current: this.current,
+            forecast: this.forecast,
+            timestamp: new Date().getTime()
+          };
+          localStorage.setItem('wu-weather-data', JSON.stringify(data));
+        }
+      },
+      autoupdateChanged: function() {
+        if (this.autoupdate) {
+          if (!this.intervalId) {
+            this.intervalId = setInterval(this.updatePosition.bind(this),
+                this.updateInterval);
+          }
+        } else {
+          clearInterval(this.intervalId);
+          this.intervalId = null;
+        }
+      },
+      positionChanged: function() {
+        if (!this.$.jsonp_current.isInFlight()) {
+          this.$.jsonp_current.url = 'https://api.wunderground.com/api/' +
+              this.apikey + '/conditions/q/' +
+              this.position.coords.latitude + ',' +
+              this.position.coords.longitude + '.json?callback=';
+          this.$.jsonp_current.go();
+        }
+        if (!this.$.jsonp_forecast.isInFlight()) {
+          this.$.jsonp_forecast.url = 'https://api.wunderground.com/api/' +
+              this.apikey + '/forecast/q/' +
+              this.position.coords.latitude + ',' +
+              this.position.coords.longitude + '.json?callback=';
+          this.$.jsonp_forecast.go();
+        }
+      },
+      currentConditionsResponseChanged: function() {
+        this.current = this.currentConditionsResponse.current_observation;
+        this.saveToStorage();
+      },
+      forecastResponseChanged: function() {
+        this.forecast = this.forecastResponse.forecast.simpleforecast;
+        this.saveToStorage();
+      },
+      updatePosition: function() {
+        // Get the current location.
+        navigator.geolocation.getCurrentPosition(
+            this.getCurrentPositionSuccess.bind(this),
+            this.getCurrentPositionError.bind(this), {timeout: 10000});
+      },
+      getCurrentPositionSuccess: function(position) {
+        this.position = position;
+      },
+      getCurrentPositionError: function(error) {
+        console.log('PositionError', error);
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<link rel="import" href="../../../toolkit/components/g-toolbar.html"/>
+<link rel="import" href="../../../toolkit/components/g-icon-button.html"/>
+<element name="pi-toolbar" attributes="label nav hideactionbar">
+  <template>
+    <style>
+      .toolbar-label {
+        font-size: 21px;
+        margin: 0;
+      }
+      
+      @media screen and (max-width: 800px) {
+        .toolbar-label {
+          display: -webkit-box;
+          display: -webkit-flex;
+          display: flex;
+          -webkit-box-pack: center;
+          -webkit-justify-content: center;
+          justify-content: center;
+          margin-right: 56px;
+        }
+        
+        /*@polyfill #actionbar > .toolbar > *:not(:last-child) */
+        #actionbar content::-webkit-distributed(*:not(:last-child)) {
+          display: -webkit-box;
+          -webkit-box-flex: 1;
+          -webkit-flex: 1;
+          flex: 1;
+        }
+      }
+    </style>
+    <g-toolbar>
+      <g-icon-button src="{{navIconSrc}}" on-tap="navClick"></g-icon-button>
+      <div class="toolbar-label flex">{{label}}</div>
+      <g-toolbar id="actionbar" responsive="true">
+        <content></content>
+      </g-toolbar>
+    </g-toolbar>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      publish: {
+        nav: 'menu'
+      },
+      // protected
+      ready: function() {
+        this.navChanged();
+      },
+      navClick: function(e) {
+        this.send('nav');
+        e.cancelBubble = true;
+      },
+      hideactionbarChanged: function() {
+        this.$.actionbar.style.display = this.hideactionbar ? 'none' : '';
+      },
+      navChanged: function() {
+        if (this.nav) {
+          this.navIconSrc = this.resolvePath('../images/' + this.nav + '.png');
+        }
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<link rel="import" href="../../../toolkit/components/g-menu-button.html"/>
+<link rel="import" href="../../../toolkit/components/g-menu-item.html"/>
+<element name="pi-view-button" attributes="layout">
+  <template>
+    <style>
+      g-menu-item.hidden-wide {
+        display: none;
+      }
+        
+      @media screen and (max-width: 800px) {
+        g-menu-item.hidden-narrow {
+          display: none;
+        }
+        
+        g-menu-item.hidden-wide {
+          display: block;
+        }
+      }
+    </style>
+    <g-menu-button id="viewButton" responsive="true" src="../images/view_quilt.png" selected="{{layout}}">
+      <g-menu-item name="quilt" label="Quilt" class="hidden-narrow" src="../images/view_quilt.png"></g-menu-item>
+      <g-menu-item name="quilt-horiz" label="Quilt (Horizontal)" class="hidden-narrow" src="../images/view_quilt.png"></g-menu-item>
+      <g-menu-item name="grid" label="Grid" src="../images/view_module.png"></g-menu-item>
+      <g-menu-item name="list" label="List" class="hidden-wide" src="../images/view_list.png"></g-menu-item>
+      <g-menu-item name="stream" label="Stream" src="../images/view_stream.png"></g-menu-item>
+      <g-menu-item name="column" label="Column" src="../images/view_column.png"></g-menu-item>
+    </g-menu-button>
+  </template>
+  <script>
+    Toolkit.register(this);
+  </script>
+</element>
+
+<link rel="import" href="../../../toolkit/components/g-menu-button.html"/>
+<link rel="import" href="../../../toolkit/components/g-menu-item.html"/>
+<element name="pi-action-button">
+  <template>
+    <g-menu-button src="../images/plus.png" responsive="true" valign="right">
+      <g-menu-item src="../images/comment.png">Post a Comment</g-menu-item>
+      <g-menu-item src="../images/hangout.png">Share Link</g-menu-item>
+      <g-menu-item src="../images/mail.png">Email Link</g-menu-item>
+      <g-menu-item src="../images/favorite.png">Add to Favorites</g-menu-item>
+    </g-menu-button>
+  </template>
+  <script>
+    Toolkit.register(this);
+  </script>
+</element>
+
+<link rel="import" href="../../../toolkit/components/g-icon-button.html"/>
+<element name="pi-link-button" attributes="link">
+  <template>
+    <a href="{{link}}" target="_blank">
+      <g-icon-button src="../images/web.png"></g-icon-button>
+    </a>
+  </template>
+  <script>
+    Toolkit.register(this);
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<element name="pi-gfeeds" attributes="feed query results loading">
+  <script>
+    var feedsAreReady = false;
+    var pendingFeeds = [];
+    
+    var feedsReady = function() {
+      feedsAreReady = true;
+      pendingFeeds.forEach(function(cb) {
+        cb();
+      });
+      pendingFeeds = null;
+    };
+    
+    var XGFeeds = {
+      require: function(inCb) {
+        if (feedsAreReady) {
+          inCb();
+        } else {
+          pendingFeeds.push(inCb);
+        }
+      }
+    };
+    
+    google.load('feeds', '1', {callback: feedsReady.bind(this)});
+    
+    Toolkit.register(this, {
+      publish: {
+        count: 24
+      },
+      feedChanged: function() {
+        if (this.feed) {
+          this.loading = true;
+          // call fetchFeeds async to make sure any binding to count property is resolved
+          // before fetchFeeds is called
+          XGFeeds.require(this.asyncMethod.bind(this, 'fetchFeeds'));
+        } else {
+          this.results = null;
+        }
+      },
+      fetchFeeds: function() {
+        var feed = new google.feeds.Feed(this.feed);
+        feed.includeHistoricalEntries(); // tell the API we want to have old entries too
+        feed.setNumEntries(this.count); // we want this maximum number of entries, if they exist
+        feed.load(this.fetchFeedsDone.bind(this));
+      },
+      fetchFeedsDone: function(inResult) {
+        this.loading = false;
+        if (inResult.error) {
+          this.results = {};
+          this.send('error', {status: inResult.status});
+        } else {
+          this.results = inResult.feed;
+          this.send('response', {feed: inResult.feed});
+        }
+      },
+      queryChanged: function() {
+        if (this.query) {
+          this.loading = true;
+          XGFeeds.require(this.asyncMethod.bind(this, 'findFeeds'));
+        }
+      },
+      findFeeds: function() {
+        google.feeds.findFeeds(this.query, this.findFeedsDone.bind(this));
+      },
+      findFeedsDone: function(inResult) {
+        this.loading = false;
+        if (inResult.error) {
+          this.send('queryerror', {status: inResult.status});
+        } else {
+          this.send('queryresponse', {entries: inResult.entries});
+        }
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<link rel="import" href="pi-gfeeds.html"/>
+<element name="pi-feed-aggregator" attributes="feed count entries loading">
+  <template>
+    <pi-gfeeds feed="{{feedUrl}}" count="{{feedCount}}" results="{{feedResults}}"></pi-gfeeds>
+  </template>
+  <script>
+    var GET_FAVICON_URL = 'http://s2.googleusercontent.com/s2/favicons?alt=feed&domain_url=';
+    
+    var timeSince = function(inDate) {
+      var s = Math.floor(((new Date()) - inDate) / 1000);
+      var t = Math.floor(s / 31536000);
+      if (t > 1) {
+        return t + 'y';
+      }
+      t = Math.floor(s / 2592000);
+      if (t > 1) {
+        return t + 'M';
+      }
+      t = Math.floor(s / 86400);
+      if (t >= 1) {
+        return t + 'd';
+      }
+      t = Math.floor(s / 3600);
+      if (t >= 1) {
+        return t + 'h';
+      }
+      t = Math.floor(s / 60);
+      if (t > 1) {
+        return t + 'm';
+      }
+      return Math.floor(s) + 's';
+    };
+    
+    var DUMMY_TEXT = [
+      'Forma temperiemque cornua sidera dissociata cornua recessit innabilis ligavit: solidumque coeptis nullus caelum sponte phoebe di regat mentisque tanta austro capacius amphitrite sui quin postquam semina fossae liquidum umor galeae coeptis caligine liberioris quin liquidum matutinis invasit posset: flexi glomeravit radiis certis invasit oppida postquam onerosior inclusum dominari opifex terris pace finxit quam aquae nunc sine altae auroram quam habentem homo totidemque scythiam in pondus ensis tegit caecoque poena lapidosos humanas coeperunt poena aetas totidem nec natura aethera locavit caelumque distinxit animalibus phoebe cingebant moderantum porrexerat terrae possedit sua sole diu summaque obliquis melioris orbem',
+      'Quae zephyro praecipites vos frigida membra foret gentes ne librata liquidas lacusque animus liquidum ne orba opifex circumdare scythiam tuba militis chaos: sidera regio utramque quia effervescere proximus arce illic diversa homo ille aethere ventos qui principio coeperunt di colebat et nebulas adsiduis glomeravit lanient otia usu habitandae glomeravit librata cepit possedit metusque habentia sed mundi aetas sublime oppida consistere dixere dixere aequalis evolvit mixta animus sibi duae circumfluus litem egens metusque modo otia tumescere occiduo dispositam nix ut caeca innabilis conversa sponte flamina lucis lumina tegit pulsant adhuc zephyro recessit quoque tanto regio tegi terrarum extendi aeris pondus manebat summaque',
+      'Coercuit iunctarum vix sic aberant spisso imagine litem cetera nubes ambitae tanta usu circumfuso fulminibus umentia rectumque iuga pluviaque meis semina regat ne campoque meis coeperunt nix cura iunctarum ligavit: secant ventos seductaque permisit sic iunctarum locoque his coeptis tum terras animalia recepta aethera cornua invasit tollere videre tonitrua humanas otia tuba alta dissociata sanctius adsiduis inclusum caesa ita onus sine pluviaque litem manebat fixo extendi ubi inposuit cum sublime membra undas orba forma deducite aethera turba coercuit retinebat obliquis bracchia nisi mentisque origine peregrinum manebat',
+      'Obstabatque cingebant nitidis rapidisque cepit moderantum discordia habentia frigore solidumque fert inter caecoque sine coeperunt corpore quarum fluminaque coercuit vultus animal austro quem os sectamque animus origo solidumque quoque melioris adspirate recepta utramque rapidisque caelumque orba unus pluviaque erant mutastis gravitate illic quisque alta calidis speciem mixtam ante contraria duae',
+      'Ut aer semina aequalis egens videre tum deus pluviaque quae tellure ad orbe habentia solidumque consistere pluvialibus neu ripis emicuit foret hanc abscidit et fulgura bracchia sorbentur caelo cuncta liberioris finxit tum obliquis terris deerat inter caecoque piscibus fidem otia caesa usu induit radiis supplex exemit neu cinxit nova facientes'
+    ];
+
+    Toolkit.register(this, {
+      publish: {
+        count: 24
+      },
+      useCache: true,
+      reload: function() {
+        this.forceLoad = true;
+        this.feedChanged();
+      },
+      resetCache: function() {
+        this.feedCache = {};
+      },
+      // protected
+      feedResults: null,
+      ready: function() {
+        this.resetCache();
+        this.contentNode = document.createElement('div');
+      },
+      feedChanged: function() {
+        if (this.feed) {
+          this._entries = [];
+          this.feeds = this.feed.slice(0);
+          this.feedCount = Math.ceil(this.count / this.feeds.length);
+          this.fetch();
+        } else {
+          this.entries = null;
+        }
+      },
+      fetch: function() {
+        if (this.feeds && this.feeds.length) {
+          // processing feeds one by one
+          var f = this.feeds.shift().feed;
+          if (!this.forceLoad && this.useCache && this.feedCache[f]) {
+            this.gotFeedResults(this.feedCache[f]);
+          } else {
+            // retrive feed data using pi-gfeeds (google Feed API)
+            this.loading = true;
+            this.feedUrl = f;
+          }
+        } else {
+          // done processing all feeds
+          this.fetchCompleted();
+        }
+      },
+      fetchCompleted: function() {
+        this.entries = this._entries.sort(this.dateSortDesc.bind(this));
+        this.forceLoad = false;
+        this.feedUrl = null;
+        this.loading = false;
+        this.send('response', {entries: this.entries});
+      },
+      gotFeedResults: function(inResults) {
+        if (inResults && inResults.feedUrl) {
+          this.feedCache[inResults.feedUrl] = inResults;
+          var entries = this.processFeedResults(inResults);
+          this._entries.push.apply(this._entries, entries);
+        }
+        // next feed
+        this.fetch();
+      },
+      feedResultsChanged: function() {
+        if (this.feedResults) {
+          this.gotFeedResults(this.feedResults);
+        }
+      },
+      dateSortDesc: function(inEntry1, inEntry2) {
+        var d1 = inEntry1._date || new Date(inEntry1.publishedDate);
+        var d2 = inEntry2._date || new Date(inEntry2.publishedDate);
+        if (d1 > d2) {
+          return -1;
+        } else if (d1 < d2) {
+          return 1;
+        }
+        return 0;
+      },
+      processFeedResults: function(inResults) {
+        var n = this.contentNode;
+        var entries = inResults.entries;
+        entries.forEach(function(entry) {
+          // feed source
+          entry.source = inResults.title;
+          entry.sourceLink = inResults.link;
+          entry.feedUrl = inResults.feedUrl;
+          // scrape image url
+          if (!entry.imgSrc && entry.content) {
+            var m$ = entry.content.match(/<img[^>]+src="([^">]+)"/);
+            entry.imgSrc = m$ && m$[1];
+          }
+          entry.imageShowing = !!entry.imgSrc;
+          // unescape html content
+          if (!entry.desc && entry.contentSnippet) {
+            n.innerHTML = entry.contentSnippet;
+            n.innerHTML = n.textContent;
+            entry.desc = n.textContent.trim();
+            if (!entry.desc) {
+              entry.desc = entry.title;
+            }
+          }
+          // favicon
+          if (entry.sourceLink) {
+            entry.sourceIcon = GET_FAVICON_URL + entry.sourceLink;
+          }
+          // time since
+          if (entry.publishedDate) {
+            var d = entry._date || new Date(entry.publishedDate);
+            entry._date = d;
+            entry.since = timeSince(d);
+          }
+          // dummy text used for filling white spaces (for demo only)
+          entry.dummyText = DUMMY_TEXT[Math.floor(Math.random() * DUMMY_TEXT.length)];
+        });
+        return entries;
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<element name="pi-feed-tracker">
+  <script>
+    var FEED_TRACKER_STORAGE_NAME = 'pica-feed-tracker-1';
+    
+    Toolkit.register(this, {
+      // public
+      loadStories: function(inStories) {
+        var feeds = {};
+        inStories.forEach(function(s) {
+          var l = s.feedUrl;
+          var t = s.title;
+          var f = this.feeds[l];
+          var nf = feeds[l] = feeds[l] || {};
+          s.read = !!(f && f[t] && f[t].read);
+          nf[t] = {read: s.read};
+        }.bind(this));
+        for (var f in feeds) {
+          this.feeds[f] = feeds[f];
+        }
+        this.save();
+      },
+      markRead: function(inStory) {
+        var f = this.feeds[inStory.feedUrl];
+        if (f) {
+          f[inStory.title].read = inStory.read = true;
+          this.save();
+        }
+      },
+      getReadCountForTopic: function(inTopic) {
+        var read = 0;
+        inTopic.feed.forEach(function(f) {
+          var feed = this.feeds[f.feed];
+          for (var t in feed) {
+            feed[t].read && read++;
+          }
+        }.bind(this));
+        return read;
+      },
+      // protected
+      ready: function() {
+        this.feeds = {};
+        this.load();
+      },
+      load: function() {
+        var s = window.localStorage.getItem(FEED_TRACKER_STORAGE_NAME);
+        if (s) {
+          this.feeds = JSON.parse(s).feeds;
+        }
+      },
+      save: function() {
+        window.localStorage.setItem(FEED_TRACKER_STORAGE_NAME,
+            JSON.stringify({feeds: this.feeds}));
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<link rel="import" href="../../../toolkit/components/g-icon.html"/>
+<element name="pi-items-view" attributes="layout view items selected">
+  <link rel="stylesheet" href="css/pi-layout.css" />
+  <link rel="stylesheet" href="css/pi-layout-flex.css" />
+  <link rel="stylesheet" href="css/pi-items-view.css" />
+  <template>
+    <div id="container" loaded="{{loaded}}" class="view {{layout}} {{view}}">
+      <template repeat="{{viewItems}}">
+        <div class="item">
+          <div class="card" on-tap="itemClick">
+            <div class="image" style="background-image: url({{imgSrc}});" showing="{{imageShowing}}"></div>
+            <div class="info">
+              <div class="title">{{title}}
+                <span class="unread-count">{{unread}}</span>
+              </div>
+              <div class="description">{{desc}}</div>
+              <div class="content">{{dummyText}}</div>
+              <div class="source">
+                <span class="source-icon" style="background-image: url({{sourceIcon}});"></span>
+                <span class="source-title">{{source}}
+                  <span class="source-time">{{since}}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <div id="more" on-tap="loadMore">
+        <g-icon src="../images/refresh_lightreg.png"></g-icon>
+          Load more articles
+      </div>
+    </div>
+  </template>
+  <script>
+    function toNumber(s) {
+      return Number(s.substring(0, s.length - 2));
+    }
+  
+    function calcMaxX() {
+      var maxX = 0;
+      for (var i = 0; i < cards.length; i++) {
+        if (maxX < cards[i].offsetLeft) { maxX = cards[i].offsetLeft; }
+      }
+      return maxX;
+    }
+    
+    Toolkit.register(this, {
+      publish: {
+        layout: 'grid',
+        loaded: true
+      },
+      pageSize: 24,
+      ready: function() {
+        this.setAttribute('touch-action', 'scroll');
+        this.updateMoreShowing();
+      },
+      loadedChanged: function() {
+        if (this.loaded && this.layout == 'grid') {
+          this.cascade();
+        }
+      },
+      itemsChanged: function() {
+        if (this.items && this.pageSize > 0) {
+          this.viewItems = this.items.slice(0, this.pageSize);
+        }
+        this.updateMoreShowing();
+        this.scrollToTop();
+      },
+      scrollToTop: function() {
+        requestAnimationFrame(function() {
+          this.scrollTop = 0;
+        }.bind(this));
+      },
+      updateMoreShowing: function() {
+        this.$.more.style.display = 
+            (this.viewItems && this.viewItems.length < 
+                (this.items && this.items.length)) ? null : 'none';
+      },
+      loadMore: function() {
+        var l = this.viewItems.length;
+        var more = this.items.slice(l, l + this.pageSize);
+        this.viewItems.push.apply(this.viewItems, more);
+        this.updateMoreShowing();
+      },
+      itemClick: function(inEvent, inDetail, inSender) {
+        this.selected = inSender.templateInstance.model;
+        this.send('select', {item: this.selected});
+      },
+      cascade: function() {
+        var container = this.$.container;
+        var cards = container.querySelectorAll('.item');
+        
+        var width = toNumber(window.getComputedStyle(cards[0]).width);
+        var height = toNumber(window.getComputedStyle(cards[0]).height);
+
+        var containerWidth = toNumber(window.getComputedStyle(container).width);
+        var containerHeight = document.documentElement.clientHeight;
+        
+        var scaledMiddleX = containerWidth / width / 2;
+        var scaledMiddleY = containerHeight / height / 2;
+
+        var parGroup = new ParGroup();
+
+        for (var i = 0; i < cards.length; i++) {
+          var y = cards[i].offsetTop / height;
+          var x = cards[i].offsetLeft / width;
+          var yDist = scaledMiddleY - y + 0.5;
+          var xDist = scaledMiddleX - x + 0.5;
+          var dist = Math.sqrt(yDist * yDist + xDist * xDist);
+          var yTrans = yDist * 10 / dist;
+          var xTrans = xDist * 10 / dist;
+          var d = x + y;
+          parGroup.add(
+            new Animation(cards[i], {
+              opacity: ["0", "1"],
+              "-webkit-transform": [
+                "translate(" + xTrans + "px, " + yTrans + "px) translateZ(0)", 
+                "translate(0px, 0px) translateZ(0)"]},
+              {duration: 0.5, startDelay: 0.03 * d, fillMode: "backwards"}));
+        }
+        document.timeline.play(parGroup);
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<element name="pi-story" attributes="story">
+  <template>
+    <style>
+      .story-main {
+        position: absolute;
+        top: 0;
+        bottom: 44px;
+        width: 100%;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      
+      .body {
+        max-width: 770px;
+        margin: 0 auto;
+        font-size: 12px;
+        padding: 40px;
+      }
+       
+      #header {
+        padding-bottom: 20px;
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+      }
+      
+      #title {
+        font-size: 26px;
+        -webkit-box-flex: 1;
+        -webkit-flex: 1;
+        flex: 1;
+      }
+      
+      #author {
+        color: #666;
+      }
+      
+      #detail {
+        padding-top: 20px;
+      }
+      
+      #detail img {
+        pointer-events: none;
+      }
+      
+      #detail a:link {
+        text-decoration: none;
+        color: #3c80f6;
+      }
+      
+      .bottom-source-bar {
+        position: absolute;
+        width: 100%;
+        height: 44px;
+        bottom: 0;
+        box-sizing: border-box;
+        -moz-box-sizing: border-box;
+        border-top: 1px solid #ddd;
+        padding: 12px;
+      }
+      
+      .bottom-source-bar > * {
+        display: inline-block;
+        vertical-align: middle;
+      }
+      
+      .bottom-source-icon {
+        width: 20px;
+        height: 20px;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 100% 100%;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+      }
+      
+      .bottom-source-title {
+        padding-left: 2px;
+        font-weight: 600;
+        font-size: 12px;
+        opacity: .5;
+      }
+      
+      .bottom-source-time {
+        padding-left: 8px;
+        font-weight: 400;
+      }
+      
+      @media screen and (max-width: 1024px) {
+        .body {
+          max-width: 688px;
+        }
+      }
+      
+      @media screen and (max-width: 800px) {
+        .story-main {
+          bottom: 0;
+        }
+        
+        .body {
+          padding: 15px;
+        }
+        
+        #detail img {
+          max-width: 100%;
+          height: auto;
+        }
+        
+        .bottom-source-bar {
+          display: none;
+        }
+      }
+    </style>
+    <div class="story-main" touch-action="pan-y">
+      <div class="body">
+        <div id="header">
+          <div id="title">{{story.title}}</div>
+        </div>
+        <div id="author">by {{story.author}} on {{story.publishedLocaleDate}}</div>
+        <div id="detail">
+          <div id="content"></div>
+        </div>
+      </div>
+    </div>
+    <div class="bottom-source-bar">
+      <div class="bottom-source-icon" style="background-image: url({{story.sourceIcon}});"></div>
+      <div class="bottom-source-title">{{story.source}}
+        <span class="bottom-source-time">{{story.since}}</span>
+      </div>
+    </div>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      content: '',
+      ready: function() {
+        if (!this.hasAttribute('tabindex')) {
+          this.tabIndex = -1;
+        }
+      },
+      storyChanged: function() {
+        if (this.story && this.story.content) {
+          this.content = this.story.content;
+          if (!this.story.publishedLocaleDate) {
+            var d = new Date(this.story.publishedDate);
+            this.story.publishedLocaleDate = d.toLocaleString();
+          }
+        }
+      },
+      contentChanged: function() {
+        var content = this.content || '';
+        if (content) {
+          content = content.replace(/(<iframe.*?>.*?<\/iframe>)/g, '');
+          content = content.replace(/<a/g, '<a target="' + this.targetWindow + '" ');
+        }
+        this.$.content.innerHTML = content;
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<link rel="import" href="../../../toolkit/components/g-panels.html"/>
+<link rel="import" href="pi-feed-aggregator.html"/>
+<link rel="import" href="pi-feed-tracker.html"/>
+<link rel="import" href="pi-items-view.html"/>
+<link rel="import" href="pi-story.html"/>
+<element name="pi-feed-viewer" attributes="topics panel topic stories story layout topicslayout">
+  <link rel="stylesheet" href="css/pi-feed-viewer.css" />
+  <template>
+    <g-panels id="panels" class="feed-viewer-panels" autoselect selected="{{panel}}" transition="keyframe" 
+        on-select="panelSelected" on-canselect="panelCanSelect">
+      <pi-items-view id="topics" layout="{{topicslayout}}" items="{{topics}}" view="topics" selected="{{topic}}"></pi-items-view>
+      <pi-items-view id="stories" layout="{{layout}}" items="{{stories}}" view="flex" selected="{{story}}"></pi-items-view>
+      <pi-story id="story" story="{{story}}" on-flick="storyFlickHandler" on-keydown="storyKeydownHandler"></pi-story>
+    </g-panels>
+    <div id="loading" loading="{{loading}}"></div>
+    <pi-feed-aggregator id="feeds" feed="{{topic.feed}}" count="{{feedCount}}" entries="{{stories}}" 
+        loading="{{loading}}"></pi-feed-aggregator>
+    <pi-feed-tracker id="tracker"></pi-feed-tracker>
+  </template>
+  <script>
+    var RIGHT_ARROW_KEY = 39;
+    var LEFT_ARROW_KEY = 37;
+    
+    // TODO(sorvell): if necessary, shouldn't go here
+    var isEmpty = function(inObj) {
+      if (inObj) {
+        for (var i in inObj) {
+          return false;
+        }
+      }
+      return true;
+    }
+    
+    Toolkit.register(this, {
+      publish: {
+        loading: true,
+        track: true,
+        feedCount: 200
+      },
+      get canprevious() {
+        return this.panel != 'topics';
+      },
+      previous: function() {
+        this.$.panels.previous();
+      },
+      reload: function() {
+        if (this.panel == 'topics') {
+          this.topicsChanged();
+          this.$.feeds.resetCache();
+        } else if (this.panel == 'stories') {
+          this.$.feeds.reload();
+        }
+      },
+      // protected
+      ready: function() {
+        var mq = window.matchMedia('(max-width: 800px)');
+        mq.addListener(this.layoutChange.bind(this));
+        this.layoutChange(mq);
+        this.asyncMethod('loaded');
+      },
+      loaded: function() {
+        this.loading = false;
+      },
+      layoutChange: function(inQuery) {
+        this.$.panels.classList.toggle('g-panels-fly-up-right', inQuery.matches);
+        this.$.panels.classList.toggle('g-panels-scale-slide', !inQuery.matches);
+      },
+      topicsChanged: function() {
+        if (this.topics) {
+          this.fetchImageForTopics();
+          this.updateReadCount();
+        }
+      },
+      storiesChanged: function() {
+        if (this.stories) {
+          if (this.track) {
+            this.$.tracker.loadStories(this.stories);
+            this.updateReadCount(this.topic);
+          }
+          this.panel = 'stories';
+          this.$.stories.loaded = false;
+          this.asyncMethod('storiesLoaded');
+        }
+      },
+      storiesLoaded: function() {
+        this.$.stories.loaded = true;
+      },
+      storyChanged: function() {
+        if (!isEmpty(this.story)) {
+          if (this.track) {
+            this.$.tracker.markRead(this.story);
+            this.updateReadCount(this.topic);
+          }
+          this.panel = 'story';
+        }
+      },
+      nextPrevStory: function(inNext, inPrev) {
+        if (inPrev || inNext) {
+          var i = this.stories.indexOf(this.story);
+          var s = this.stories[i + (inPrev ? -1 : 1)];
+          if (s) {
+            this.story = s;
+            return true;
+          }
+        }
+      },
+      fetchImageForTopics: function() {
+        this.topics.forEach(function(t) {
+          t.imgSrc = '';
+          var fa = document.createElement('pi-feed-aggregator');
+          fa.count = 4;
+          fa.addEventListener('response', function(e) {
+            var ns = e.detail && e.detail.entries || [];
+            ns.forEach(function(n) {
+              if (n.imgSrc) {
+                var image = new Image();
+                image.onload = function(e) {
+                  var img = e.currentTarget;
+                  // use the image if the size > 10x10px
+                  if (img.width > 10 && img.height > 10 && !t.imgSrc) {
+                    t.imgSrc = img.src;
+                  }
+                }.bind(this);
+                image.src = n.imgSrc;
+              }
+            });
+          });
+          fa.feed = t.feed;
+        });
+      },
+      updateReadCount: function(inTopic) {
+        if (this.track) {
+          var topics = inTopic ? [inTopic] : this.topics;
+          topics.forEach(function(t) {
+            t.unread = this.feedCount - this.$.tracker.getReadCountForTopic(t);
+          }.bind(this));
+        }
+      },
+      // TODO(sorvell): handle selected event since this fires after the selection
+      // is complete and this is when we want to make the following changes.
+      // note, we want selected topic/story to become unset
+      // when the panel that shows them is not selected, this allows
+      // us to rely on topic/storyChanged to show the relevant
+      // panel.
+      // it's important to set topic to {} so that
+      // topic.feed actually changes and updates feeds.feed.
+      panelSelected: function(e, inDetail, inSender) {
+        if (e.target == this.$.panels) {
+          if (inSender.selected == 'topics') {
+            this.topic = {};
+          } else if (inSender.selected == 'stories') {
+            this.story = {};
+          }
+          //
+          if (inSender.selected == 'story') {
+            this.$.story.focus();
+          } else {
+            inSender.focus();
+          }
+        }
+      },
+      panelCanSelect: function(e, inDetail) {
+        if ((inDetail.selected == 'stories' && (!this.stories && !this.$.feeds.loading)) || 
+           (inDetail.selected == 'story' && isEmpty(this.story))) {
+          inDetail.preventSelect();
+        }
+      },
+      storyKeydownHandler: function(e) {
+        var n = e.keyCode == RIGHT_ARROW_KEY, p = e.keyCode == LEFT_ARROW_KEY;
+        if (this.nextPrevStory(n, p)) {
+          e.cancelBubble = true;
+        }
+      },
+      storyFlickHandler: function(e) {
+        if (e.majorAxis == 'x' && e.pointerType === 'touch') {
+          var n = e.xVelocity < 0, p = e.xVelocity > 0;
+          if (this.nextPrevStory(n, p)) {
+            e.cancelBubble = true;
+          }
+        }
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<link rel="import" href="../../../toolkit/components/g-icon.html"/>
+<link rel="import" href="../../../pantry/Speech/g-speech-mic.html"/>
+<link rel="import" href="pi-gfeeds.html"/>
+<link rel="import" href="pi-feed-viewer.html"/>
+<element name="pi-explore" attributes="panel topic canprevious">
+  <template>
+    <style>
+      @host {
+        * {
+          display: -webkit-box;
+          display: -webkit-flex;
+          display: flex;
+          -webkit-box-orient: vertical;
+          -webkit-flex-flow: column;
+          flex-direction: column;
+        }
+      }
+      
+      pi-feed-viewer#viewer {
+        -webkit-box-flex: 1;
+        -webkit-flex: 1;
+        flex: 1;
+      }
+      
+      #searchBox {
+        position: relative;
+        width: 100%;
+        height: 50px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.16);
+      }
+      
+      #searchInput {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0 1px;
+        padding: 0 0 0 40px;
+        border: 0;
+        font-size: 16px;
+      }
+      
+      #searchBox > g-speech-mic {
+        position: absolute;
+        top: 5px;
+        bottom: 0;
+        right: 0;
+      }
+      
+      #searchBox > g-icon {
+        position: absolute;
+        top: 13px;
+        bottom: 0;
+        left: 10px;
+      }
+    </style>
+    <div id="searchBox">
+      <input id="searchInput" on-input="inputChange"/>
+      <g-icon src="../images/search.png"></g-icon>
+      <g-speech-mic id="speech" on-result="speechResult"></g-speech-mic>
+    </div>
+    <pi-feed-viewer id="viewer" topics="{{topics}}" topic="{{topic}}" panel="{{panel}}"
+        layout="{{layout}}" topicslayout="{{layout}}" loading="{{loading}}" track="false"></pi-feed-viewer>
+    <pi-gfeeds query="{{query}}" on-queryresponse="queryResponse" loading="{{loading}}"></pi-gfeeds>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      publish: {
+        layout: 'list'
+      },
+      get canprevious() {
+        return this.$.viewer.canprevious;
+      },
+      previous: function() {
+        this.$.viewer.previous();
+      },
+      // protected
+      ready: function() {
+        this.contentNode = document.createElement('div');
+      },
+      panelChanged: function() {
+        this.$.searchBox.hidden = this.panel !== 'topics';
+      },
+      inputChange: function() {
+        clearTimeout(this._queryJob);
+        this._queryJob = setTimeout(function() {
+          this.$.speech.stop();
+          this.query = this.$.searchInput.value;
+        }.bind(this), 500);
+      },
+      speechResult: function(e, inDetail) {
+        this.$.searchInput.value = inDetail.transcript;
+        this.inputChange();
+      },
+      queryResponse: function(e, inDetail) {
+        var n = this.contentNode;
+        this.topics = [];
+        inDetail.entries.forEach(function(e) {
+          // unescape html content
+          n.innerHTML = e.title;
+          var t = n.textContent.trim();
+          this.topics.push({title: t, feed: [{feed: e.url}]});
+        }.bind(this));
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<link rel="import" href="../../../pantry/CoolClock/coolclock.html"/>
+<link rel="import" href="../../../pantry/Stock/stock.html"/>
+<link rel="import" href="../../../pantry/Weather/wu-weather.html"/>
+<element name="pi-home" attributes="stocks">
+  <template>
+    <style>
+      @host {
+        * {
+          display: block;
+          width: 100%;
+          height: 100%;
+          overflow: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+      }
+      
+      .widgets {
+        width: 1024px;
+        box-sizing: border-box;
+        -mox-box-sizing: border-box;
+        padding: 6px;
+        margin: 0 auto;
+      }
+      
+      .widgets > *:not(template) {
+        display: inline-block;
+        width: 491px;
+        height: 250px;
+        box-sizing: border-box;
+        -moz-box-sizing: border-box;
+        vertical-align: top;
+        margin: 8px 6px;
+        padding: 4px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      }
+      
+      .center {
+        text-align: center;
+      }
+      
+      x-coolclock {
+        display: block;
+        padding-top: 30px;
+      }
+      
+      wu-weather {
+        display: inline-block;
+        box-shadow: none;
+        text-align: left;
+        padding: 0;
+      }
+      
+      @media screen and (max-width: 1023px) {
+        .widgets {
+          width: 512px;
+        }
+      }
+      
+      @media screen and (max-width: 600px) {
+        .widgets {
+          width: auto;
+        }
+        
+        .widgets > *:not(template) {
+          display: block;
+          width: auto;
+          margin-bottom: 12px;
+        }
+      }
+    </style>
+    <div class="widgets">
+      <div class="center">
+        <x-coolclock></x-coolclock>
+      </div>
+      <div class="center">
+        <wu-weather autoupdate="false"></wu-weather>
+      </div>
+      <template repeat="{{stocks}}">
+        <x-stock symbol="{{}}" autoupdate="false"></x-stock>
+      </template>
+    </div>
+  </template>
+  <script>
+    Toolkit.register(this, {
+      ready: function() {
+        this.asend('ready');
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<link rel="import" href="../../../toolkit/components/g-icon-button.html"/>
+<link rel="import" href="../../../toolkit/components/g-menu-button.html"/>
+<link rel="import" href="../../../toolkit/components/g-menu-item.html"/>
+<link rel="import" href="pi-gfeeds.html"/>
+<element name="pi-accounts" attributes="accounts">
+  <link rel="stylesheet" href="css/pi-accounts.css" />
+  <template>
+    <div class="item">
+      <div class="flex"></div>
+      <button class="button" on-tap="reset">Restore Defaults</button>
+    </div>
+    <div class="header item">Finance</div>
+    <div>
+      <template repeat="{{accounts.stocks}}">
+        <div class="item">
+          <div class="flex">{{}}</div>
+          <g-icon-button src="../images/clear.png" on-tap="removeStock"></g-icon-button>
+        </div>
+      </template>
+    </div>
+    <div class="item">
+      <div class="item-input-label">Symbol: </div>
+      <input id="symbol" autocorrect="off" operation="addStock" on-keyup="keyupHandler" />
+      <g-icon-button src="../images/add.png" on-tap="addStock"></g-icon-button>
+    </div>
+    <div class="header item">Topics</div>
+    <div class="item accounts-title">Add New Feed</div>
+    <div class="item no-border">
+      <div class="item-input-label">Url: </div>
+      <input id="feed" type="url" class="flex" operation="addFeed" on-keyup="keyupHandler" />
+      <g-icon-button src="../images/add.png" on-tap="addFeed"></g-icon-button>
+    </div>
+    <div class="item">
+      <div class="item-input-label">Category: </div>
+      <span class="category-select-value">{{selectedCategory}}</span>
+      <g-menu-button id="categorySelect" selected="{{selectedCategory}}" src="../images/arrow_dropdown.png">
+        <template repeat="{{accounts.categories}}">
+          <g-menu-item name="{{}}">{{}}</g-menu-item>
+        </template>
+      </g-menu-button>
+    </div>
+    <div class="item accounts-title">Add New Category</div>
+    <div class="item">
+      <div class="item-input-label">Name: </div>
+      <input id="category" class="flex" operation='addCategory' on-keyup="keyupHandler" />
+      <g-icon-button src="../images/add.png" on-tap="addCategory"></g-icon-button>
+    </div>
+    <div>
+      <template repeat="{{accounts.topics}}">
+        <div class="item accounts-title">
+          <g-icon class="accounts-title-icon" src="../images/folder.png"></g-icon>
+          <div class="flex">{{title}}</div>
+          <g-icon-button src="../images/clear.png" on-tap="removeTopic"></g-icon-button>
+        </div>
+        <template repeat="{{feed}}">
+          <div class="item">
+            <div class="flex accounts-feed-title">{{title}}</div>
+            <g-icon-button src="../images/clear.png" on-tap="removeFeed"></g-icon-button>
+          </div>
+        </template>
+      </template>
+    </div>
+    <pi-gfeeds feed="{{feedUrl}}" count="0" on-response="feedResponse" on-error="feedResponse"></pi-gfeeds>
+  </template>
+  <script>
+    var ENTER_KEY = 13;
+    
+    Toolkit.register(this, {
+      ready: function() {
+        this.setAttribute('touch-action', 'scroll');
+        this.asend('ready');
+      },
+      accountsChanged: function() {
+        this.selectedCategory = this.accounts.categories[0];
+      },
+      addStock: function() {
+        var s = this.$.symbol.value;
+        if (s) {
+          this.accounts.addStock(s);
+          this.$.symbol.value = '';
+        }
+      },
+      removeStock: function(inEvent, inDetail, inSender) {
+        this.accounts.removeStock(inSender.templateInstance.model);
+      },
+      addFeed: function() {
+        var f = this.$.feed.value;
+        if (f) {
+          // verify feed and retrieve feed title
+          this.feedUrl = f;
+        }
+      },
+      feedResponse: function(e, inDetail) {
+        var f = inDetail.feed;
+        if (f) {
+          this.accounts.addFeed({title: f.title, feed: f.feedUrl,
+            category: this.selectedCategory});
+          this.$.feed.value = '';
+          this.feedUrl = null;
+        } else {
+          console.error('Error trying to add feed', inDetail);
+        }
+      },
+      removeFeed: function(inEvent, inDetail, inSender) {
+        this.accounts.removeFeed(inSender.templateInstance.model);
+      },
+      removeTopic: function(inEvent, inDetail, inSender) {
+        var m = inSender.templateInstance.model;
+        this.accounts.removeTopic(m);
+        this.removeCategory(m.title);
+      },
+      addCategory: function() {
+        var n = this.$.category.value;
+        if (n) {
+          this.accounts.addCategory(n);
+          this.$.category.value = '';
+        }
+      },
+      removeCategory: function(inCategory) {
+        this.accounts.removeCategory(inCategory);
+      },
+      reset: function() {
+        this.accounts.reset();
+      },
+      keyupHandler: function(e, inDetail, inSender) {
+        var op = inSender.getAttribute('operation');
+        if (e.keyCode == ENTER_KEY && op) {
+          this[op]();
+        }
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<element name="pi-accounts-model" attributes="topics categories stocks">
+  <script>
+    var DEFAULT_TOPICS = [
+      {title: 'Technology', feed: [
+        {title: 'The Verge', feed: 'http://www.theverge.com/rss/index.xml'},
+        {title: 'Engadget', feed: 'http://feeds.engadget.com/weblogsinc/engadget'}]},
+      {title: 'Sports', feed: [
+        {title: 'Deadspin', feed: 'http://feeds.gawker.com/deadspin/full'}]},
+      {title: 'Music', feed: [
+        {title: 'Indie Shuffle', feed: 'http://feeds.feedburner.com/indieshuffle'},
+        {title: 'Create Digital Music', feed: 'http://createdigitalmusic.com/feed/'}]},
+      {title: 'Art', feed: [
+        {title: 'Wooster Collective', feed: 'http://feeds.feedburner.com/wooster'},
+        {title: 'Doodlers Anonymous', feed: 'http://feeds.feedburner.com/DoodlersAnonymous'},
+        {title: 'but does it float', feed: 'http://feeds2.feedburner.com/ButDoesItFloat?format=xml'}]},
+      {title: 'Fashion', feed: [
+        {title: 'Hybebeast', feed: 'http://feeds.feedburner.com/hypebeast/feed'}]},
+      {title: 'Architecture', feed: [
+        {title: 'Dezeen', feed: 'http://feeds.feedburner.com/dezeen'},
+        {title: 'Design Milk Architecutre', feed: 'http://feeds.feedburner.com/DesignMilkArchitecture'}]},
+      {title: 'Design', feed: [
+        {title: 'Design Milk', feed: 'http://feeds.feedburner.com/design-milk'},
+        {title: 'Yummy Fresh grain', feed: 'http://feeds.feedburner.com/GrainEdit'},
+        {title: 'Designspiration', feed: 'http://feeds.feedburner.com/dspn'}]},
+      {title: 'Food', feed: [
+        {title: 'The Kitchn', feed: 'http://feeds.thekitchn.com/apartmenttherapy/thekitchn'},
+        {title: 'Scanwiches', feed: 'http://scanwiches.com/rss'}]}
+    ];
+    
+    var DEFAULT_CATEGORIES = ['Technology', 'Sports', 'Music', 'Art', 'Fashion', 'Architecture', 'Design', 'Food'];
+    
+    var DEFAULT_STOCKS = ['GOOG', 'AAPL'];
+    
+    var ACCOUNTS_STORAGE_NAME = 'pica-accounts-model-1';
+    
+    Toolkit.register(this, {
+      addTopic: function(inTopic) {
+        this.addItem(this.topics, inTopic);
+        this.updateTopics();
+      },
+      removeTopic: function(inTopic) {
+        this.removeItem(this.topics, inTopic);
+        this.updateTopics();
+      },
+      addFeed: function(inFeed) {
+        for (var i=0, t; t = this.topics[i]; i++) {
+          if (t.title == inFeed.category) {
+            t.feed.push({title: inFeed.title, feed: inFeed.feed});
+            this.save();
+            return;
+          }
+        }
+        this.addTopic({title: inFeed.category,
+          feed: [{title: inFeed.title, feed: inFeed.feed}]});
+      },
+      removeFeed: function(inFeed) {
+        this.topics.forEach(function(t) {
+          if (t.feed) {
+            this.removeItem(t.feed, inFeed);
+          }
+        }.bind(this));
+      },
+      addCategory: function(inCategory) {
+        this.addItem(this.categories, inCategory);
+      },
+      removeCategory: function(inCategory) {
+        this.removeItem(this.categories, inCategory);
+      },
+      addStock: function(inStock) {
+        this.addItem(this.stocks, inStock);
+      },
+      removeStock: function(inStock) {
+        this.removeItem(this.stocks, inStock);
+      },
+      reset: function() {
+        this.topics = DEFAULT_TOPICS.slice(0);
+        this.categories = DEFAULT_CATEGORIES.slice(0);
+        this.stocks = DEFAULT_STOCKS.slice(0);
+        this.save();
+        this.load();
+      },
+      // protected
+      ready: function() {
+        this.load();
+      },
+      addItem: function(inItems, inItem) {
+        inItems.push(inItem);
+        this.save();
+      },
+      removeItem: function(inItems, inItem) {
+        var i = inItems.indexOf(inItem);
+        if (i >= 0) {
+          inItems.splice(i, 1);
+        }
+        this.save();
+      },
+      load: function() {
+        var s = window.localStorage.getItem(ACCOUNTS_STORAGE_NAME);
+        if (s) {
+          var a = JSON.parse(s);
+          this.topics = a.topics;
+          this.categories = a.categories;
+          this.stocks = a.stocks;
+        } else {
+          this.reset();
+        }
+      },
+      save: function() {
+        window.localStorage.setItem(ACCOUNTS_STORAGE_NAME, JSON.stringify({
+          topics: this.topics, categories: this.categories, stocks: this.stocks}));
+      },
+      updateTopics: function() {
+        // force to mutate topics to trigger property changed (e.g. itemsChanged in pi-items-view)
+        this.topics = this.topics.slice(0);
+      }
+    });
+  </script>
+</element>
+
+<!--
+/*
+ * Copyright 2013 The Toolkitchen Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+-->
+<link rel="import" href="../../../toolkit/components/g-app.html"/>
+<link rel="import" href="../../../toolkit/components/g-panels.html"/>
+<link rel="import" href="../../../toolkit/components/g-menu-item.html"/>
+<link rel="import" href="../../../toolkit/components/g-ribbon.html"/>
+<link rel="import" href="pi-toolbar.html"/>
+<link rel="import" href="pi-toolbar-buttons.html"/>
+<link rel="import" href="pi-feed-viewer.html"/>
+<link rel="import" href="pi-explore.html"/>
+<link rel="import" href="pi-home.html"/>
+<link rel="import" href="pi-accounts.html"/>
+<link rel="import" href="pi-accounts-model.html"/>
+<element name="pi-app" extends="g-app" on-keyup="keyupHandler">
+  <link rel="stylesheet" href="css/pi-app.css" />
+  <template>
+    <g-panels id="panels" selected="{{selectedPanel}}" transition="flow" autoselect>
+      <g-ribbon id="ribbon" class="custom-panel" label="Pica" selected="{{ribbonSelected}}" valueattr="label" on-activate="showMain">
+        <g-menu-item label="Home" src="../images/ribbon_home_lightreg.png" iconsize="32"></g-menu-item>
+        <g-menu-item label="Topics" src="../images/ribbon_topics_lightreg.png" iconsize="32"></g-menu-item>
+        <g-menu-item label="Explore" src="../images/ribbon_explore_lightreg.png" iconsize="32"></g-menu-item>
+        <g-menu-item label="Accounts" src="../images/ribbon_accounts_lightreg.png" iconsize="32"></g-menu-item>
+      </g-ribbon>
+      <div id="main" on-tap="showMain" hideactionbar="{{hideActionbar}}">
+        <pi-toolbar label="{{toolbarLabel}}" nav="{{nav}}" hideactionbar="{{hideActionbar}}" on-nav="navAction">
+          <pi-link-button id="linkButton" link="{{story.link}}"></pi-link-button>
+          <pi-view-button id="viewButton" layout="{{selectedLayout}}"></pi-view-button>
+          <pi-action-button></pi-action-button>
+          <g-icon-button src="../images/refresh.png" on-tap="reloadAction"></g-icon-button>
+        </pi-toolbar>
+        <g-panels id="contentPanels" selected="{{ribbonSelected}}" on-select="contentPanelSelectHandler">
+          <!-- <pi-home id="Home" stocks="{{$.accountsModel.stocks}}"></pi-home> -->
+          <div id="Home" on-ready="homeReadyHandler">
+            <div class="panel-loading"></div>
+            <template dehydrated>
+              <pi-home stocks="{{$.accountsModel.stocks}}"></pi-home>
+            </template>
+          </div>
+          <pi-feed-viewer id="Topics" topics="{{$.accountsModel.topics}}" panel="{{selectedSubPanel}}" 
+              layout="{{layout}}" topicslayout="grid" story="{{story}}"></pi-feed-viewer>
+          <pi-explore id="Explore" panel="{{selectedSubPanel}}"></pi-explore>
+          <!-- <pi-accounts id="Accounts" accounts="{{$.accountsModel}}"></pi-accounts> -->
+          <div id="Accounts" on-ready="accountsReadyHandler">
+            <div class="panel-loading"></div>
+            <template dehydrated>
+              <pi-accounts accounts="{{$.accountsModel}}"></pi-accounts>
+            </template>
+          </div>
+        </g-panels>
+      </div>
+    </g-panels>
+    <pi-accounts-model id="accountsModel"></pi-accounts-model>
+  </template>
+  <script>
+    var ESCAPE_KEY = 27;
+    
+    Toolkit.register(this, {
+      ribbonSelected: 'Topics',
+      selectedPanel: 'main',
+      selectedLayout: '',
+      selectedSubPanel: '',
+      ready: function() {
+        this.super();
+        // hydrate
+        if (location.search.indexOf('hydrate') >= 0) {
+          this.hydrate(this.$.Home);
+          this.hydrate(this.$.Accounts);
+        }
+        // screen size change
+        var mq = window.matchMedia('(max-width: 800px)');
+        mq.addListener(this.screenSizeChange.bind(this));
+        this.screenSizeChange(mq);
+        // initialization
+        this.selectedLayout = this.layout;
+        this.selectedSubPanel = 'topics';
+      },
+      screenSizeChange: function(inQuery) {
+        if (inQuery.matches && this.selectedLayout == 'quilt') {
+          // use stream layout if user select quilt and in phone size
+          this.layout = 'stream';
+        } else {
+          this.layout = this.selectedLayout ||
+              (inQuery.matches ? 'stream' : 'quilt');
+        }
+      },
+      selectedLayoutChanged: function() {
+        this.layout = this.selectedLayout;
+      },
+      getSelectedContentPanel: function() {
+        return this.$.contentPanels.getSelectedPanel();
+      },
+      navAction: function() {
+        var p = this.getSelectedContentPanel();
+        if (p.canprevious) {
+          p.previous();
+        } else {
+          this.$.panels.toggleBetween('ribbon', 'main');
+        }
+      },
+      showMain: function() {
+        this.selectedPanel = 'main';
+      },
+      reloadAction: function() {
+        var p = this.getSelectedContentPanel();
+        p.reload && p.reload();
+      },
+      ribbonSelectedChanged: function() {
+        this.updateToolbar();
+      },
+      selectedSubPanelChanged: function() {
+        this.updateToolbar();
+      },
+      updateToolbar: function() {
+        var p = this.getSelectedContentPanel();
+        this.toolbarLabel = p.canprevious && p.topic ?
+            p.topic.title : this.ribbonSelected;
+        this.nav = p.canprevious ? 'back' : 'menu';
+        this.hideActionbar = this.ribbonSelected != 'Topics';
+        this.$.viewButton.style.display = this.selectedSubPanel != 'stories' ? 'none' : '';
+        this.$.linkButton.style.display = this.selectedSubPanel != 'story' ? 'none' : '';
+      },
+      keyupHandler: function(e) {
+        if (e.keyCode == ESCAPE_KEY) {
+          this.navAction();
+        }
+      },
+      // instantiate lazy content
+      contentPanelSelectHandler: function(e, inDetails) {
+        if (e.target == this.$.contentPanels) {
+          this.hydrate(this.getSelectedContentPanel());
+        }
+      },
+      // instantiate dehydrated templates inside this nodes
+      hydrate: function(inNode) {
+        if (!inNode.hydrated) {
+          inNode.hydrated = true;
+          // FIXME(ffu): custom querySelector patch currently only supports simple selectors
+          //var t = inNode.querySelector('template[dehydrated]');
+          var t = inNode.querySelector('[dehydrated]');
+          if (t) {
+             t.bind('bind', this);
+             dirtyCheck();
+          }
+        }
+      },
+      // TODO(sorvell): since we cannot do proper property bindings dynamically
+      // we assign data to dynamic components as they become ready.
+      accountsReadyHandler: function(e) {
+        //e.target.accounts = this.$.accountsModel;
+        this.$.Accounts.classList.add('ready');
+      },
+      homeReadyHandler: function(e) {
+        //e.target.stocks = this.$.accountsModel.stocks;
+        this.$.Home.classList.add('ready');
+      }
+    });
+  </script>
+</element>
